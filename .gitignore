@@ -64,6 +64,10 @@ Desktop.ini
 # Linux
 *~
 
+# Rust
+/target/
+**/*.rs.bk
+
 # Python
 *.py[cod]
 *$py.class

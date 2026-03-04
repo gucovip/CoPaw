@@ -1,0 +1,19 @@
+[package]
+name = "copaw-agents"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+copaw-core = { path = "../core" }
+copaw-providers = { path = "../providers" }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+dirs = "5.0"
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3.10"

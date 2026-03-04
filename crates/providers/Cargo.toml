@@ -1,0 +1,22 @@
+[package]
+name = "copaw-providers"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+copaw-core = { path = "../core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Reserved for Task 9 (OpenAI provider implementation)
+reqwest = { version = "0.12", features = ["json"] }
+async-trait = { workspace = true }
+# Reserved for future error handling
+thiserror = { workspace = true }
+# Reserved for future error handling
+anyhow = { workspace = true }
+regex = "1"
+
+[dev-dependencies]
+wiremock = "0.6"
+tempfile = "3"

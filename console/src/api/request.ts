@@ -49,7 +49,18 @@ export async function request<T = unknown>(
 
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
-    return (await response.text()) as unknown as T;
+    const text = await response.text();
+    const trimmed = text.trimStart().toLowerCase();
+    if (
+      contentType.includes("text/html") ||
+      trimmed.startsWith("<!doctype html") ||
+      trimmed.startsWith("<html")
+    ) {
+      throw new Error(
+        `Expected JSON API response but got HTML from ${url}. Check BASE_URL or dev proxy.`,
+      );
+    }
+    return text as unknown as T;
   }
 
   return (await response.json()) as T;

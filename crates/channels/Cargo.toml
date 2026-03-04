@@ -1,0 +1,17 @@
+[package]
+name = "copaw-channels"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+copaw-core = { path = "../core" }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "test-util"] }
