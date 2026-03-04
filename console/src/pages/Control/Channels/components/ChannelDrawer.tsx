@@ -24,8 +24,16 @@ interface ChannelDrawerProps {
   onSubmit: (values: SingleChannelConfig) => void;
 }
 
-// DingTalk doc URL
-const dingtalkDocUrl = "https://copaw.agentscope.io/docs/channels";
+// Doc URLs per channel (anchors on https://copaw.agentscope.io/docs/channels)
+const CHANNEL_DOC_URLS: Partial<Record<ChannelKey, string>> = {
+  dingtalk:
+    "https://copaw.agentscope.io/docs/channels/#%E9%92%89%E9%92%89%E6%8E%A8%E8%8D%90",
+  feishu: "https://copaw.agentscope.io/docs/channels/#%E9%A3%9E%E4%B9%A6",
+  imessage:
+    "https://copaw.agentscope.io/docs/channels/#iMessage%E4%BB%85-macOS",
+  discord: "https://copaw.agentscope.io/docs/channels/#Discord",
+  qq: "https://copaw.agentscope.io/docs/channels/#QQ",
+};
 
 export function ChannelDrawer({
   open,
@@ -163,15 +171,15 @@ export function ChannelDrawer({
               ? `${activeLabel} ${t("channels.settings")}`
               : t("channels.channelSettings")}
           </span>
-          {activeKey === "dingtalk" && (
+          {activeKey && CHANNEL_DOC_URLS[activeKey] && (
             <Button
               type="text"
               size="small"
               icon={<LinkOutlined />}
-              onClick={() => window.open(dingtalkDocUrl, "_blank")}
+              onClick={() => window.open(CHANNEL_DOC_URLS[activeKey], "_blank")}
               className={styles.dingtalkDocBtn}
             >
-              DingTalk Doc
+              {activeLabel} Doc
             </Button>
           )}
         </div>
@@ -194,6 +202,17 @@ export function ChannelDrawer({
           <Form.Item name="bot_prefix" label="Bot Prefix">
             <Input placeholder="@bot" />
           </Form.Item>
+
+          {activeKey !== "console" && (
+            <Form.Item
+              name="filter_tool_messages"
+              label={t("channels.filterToolMessages")}
+              valuePropName="checked"
+              tooltip={t("channels.filterToolMessagesTooltip")}
+            >
+              <Switch />
+            </Form.Item>
+          )}
 
           {renderExtraFields(activeKey)}
 
