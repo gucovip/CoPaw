@@ -564,13 +564,26 @@ where
             None
         };
 
-        let response = self
+        let llm_response = self
             .model
             .chat_completion(messages, tools, tool_choice)
             .await
             .map_err(|e| AgentError::ModelFailed(e.to_string()))?;
 
-        Ok(response.content().clone())
+        let mut response = llm_response.content().clone();
+        if let Some(tool_calls) = llm_response.tool_calls() {
+            let mut parts = response.content().to_parts();
+            for call in tool_calls {
+                parts.push(ContentPart::tool_use(
+                    call.id.clone(),
+                    call.name.clone(),
+                    call.arguments.clone(),
+                ));
+            }
+            response = Message::assistant(parts);
+        }
+
+        Ok(response)
     }
 
     /// Execute a tool call.

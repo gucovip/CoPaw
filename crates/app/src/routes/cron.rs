@@ -7,8 +7,7 @@
 
 use super::schemas::{CronJobStateResponse, JobPauseResponse, JobResumeResponse, JobRunResponse};
 use crate::crons::{
-    CronJobSpec, CronJobState, CronJobView, CronManager, CronManagerError, JobExecutor,
-    JobRepository,
+    CronJobSpec, CronJobView, CronManager, CronManagerError, JobExecutor, JobRepository,
 };
 use axum::{
     extract::{Path, State},
@@ -16,8 +15,6 @@ use axum::{
     response::{IntoResponse, Json},
     Json as JsonExtractor,
 };
-use copaw_channels::ChannelManager;
-use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -180,7 +177,7 @@ where
 pub async fn update_job<S>(
     State(state): State<S>,
     Path(job_id): Path<String>,
-    JsonExtractor(mut spec): JsonExtractor<CronJobSpec>,
+    JsonExtractor(spec): JsonExtractor<CronJobSpec>,
 ) -> Result<Json<CronJobSpec>, CronApiError>
 where
     S: HasCronState + Clone + Send + Sync + 'static,
@@ -310,14 +307,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crons::{CronJobSpec, CronJobState, JobRepository};
-    use axum::body::Body;
-    use axum::http::{Method, Request};
-    use chrono::Utc;
+    use crate::crons::{CronJobSpec, JobRepository};
     use serde_json::json;
     use std::sync::Arc;
     use tempfile::TempDir;
-    use tower::ServiceExt;
 
     // Mock executor for testing
     struct MockExecutor;
@@ -572,10 +565,10 @@ mod tests {
         let job1 = create_test_job("id1", "Job 1");
         let job2 = create_test_job("id2", "Job 2");
 
-        create_job(State(state.clone()), JsonExtractor(job1))
+        let _ = create_job(State(state.clone()), JsonExtractor(job1))
             .await
             .unwrap();
-        create_job(State(state.clone()), JsonExtractor(job2))
+        let _ = create_job(State(state.clone()), JsonExtractor(job2))
             .await
             .unwrap();
 

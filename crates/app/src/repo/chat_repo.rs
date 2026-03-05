@@ -22,6 +22,7 @@ pub enum ChatRepositoryError {
     ChatNotFound(String),
 
     #[error("Invalid chat data: {0}")]
+    #[allow(dead_code)]
     InvalidData(String),
 }
 
@@ -55,6 +56,7 @@ impl ChatRepository {
     }
 
     /// Get the repository file path.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -119,7 +121,11 @@ impl ChatRepository {
     }
 
     /// Update an existing chat spec.
-    pub async fn update(&self, id: &str, mut updated_chat: ChatSpec) -> Result<(), ChatRepositoryError> {
+    pub async fn update(
+        &self,
+        id: &str,
+        mut updated_chat: ChatSpec,
+    ) -> Result<(), ChatRepositoryError> {
         let mut chats_file = self.load().await?;
         let chat = chats_file
             .chats
@@ -155,7 +161,9 @@ impl ChatRepository {
         let original_len = chats_file.chats.len();
         let ids_set: std::collections::HashSet<&str> = ids.iter().map(|s| s.as_str()).collect();
 
-        chats_file.chats.retain(|c| !ids_set.contains(c.id.as_str()));
+        chats_file
+            .chats
+            .retain(|c| !ids_set.contains(c.id.as_str()));
         let deleted_count = original_len - chats_file.chats.len();
 
         if deleted_count > 0 {
@@ -166,9 +174,16 @@ impl ChatRepository {
     }
 
     /// Find a chat spec by session ID.
-    pub async fn find_by_session(&self, session_id: &str) -> Result<Option<ChatSpec>, ChatRepositoryError> {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub async fn find_by_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<ChatSpec>, ChatRepositoryError> {
         let chats_file = self.load().await?;
-        Ok(chats_file.chats.into_iter().find(|c| c.session_id == session_id))
+        Ok(chats_file
+            .chats
+            .into_iter()
+            .find(|c| c.session_id == session_id))
     }
 }
 
@@ -295,7 +310,7 @@ mod tests {
     #[tokio::test]
     async fn test_repo_delete_batch() {
         let (repo, _temp) = create_test_repo().await;
-        let mut chat1 = create_test_chat();
+        let chat1 = create_test_chat();
         let mut chat2 = create_test_chat();
         let mut chat3 = create_test_chat();
 

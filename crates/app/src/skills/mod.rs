@@ -3,4 +3,4 @@
 
 pub mod service;
 
-pub use service::{SkillService, SkillError, SkillInfo, SkillSource};
+pub use service::{SkillError, SkillService, SkillSource};

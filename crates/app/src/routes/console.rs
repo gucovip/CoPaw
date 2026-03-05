@@ -1,15 +1,11 @@
 // -*- coding: utf-8 -*-
 // API routes for console push messages.
 
-use axum::{
-    extract::Query,
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
-};
+use axum::{extract::Query, response::Json};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+#[cfg(test)]
 use uuid::Uuid;
 
 /// Console push message.
@@ -47,6 +43,7 @@ struct StoredMessage {
 
 impl PushMessageStore {
     const MAX_AGE_SECONDS: f64 = 60.0;
+    #[cfg(test)]
     const MAX_MESSAGES: usize = 500;
 
     fn new() -> Self {
@@ -56,6 +53,7 @@ impl PushMessageStore {
     }
 
     /// Append a message to the store.
+    #[cfg(test)]
     async fn append(&self, session_id: &str, text: &str) {
         if session_id.is_empty() || text.is_empty() {
             return;
@@ -113,7 +111,7 @@ lazy_static::lazy_static! {
 /// GET /api/console/push-messages - Get pending push messages.
 pub async fn get_push_messages(
     Query(query): Query<PushMessagesQuery>,
-) -> Result<Json<PushMessagesResponse>, ConsoleError> {
+) -> Json<PushMessagesResponse> {
     let stored: Vec<StoredMessage> = if let Some(session_id) = query.session_id {
         PUSH_STORE.take(&session_id).await
     } else {
@@ -128,35 +126,8 @@ pub async fn get_push_messages(
         })
         .collect();
 
-    Ok(Json(PushMessagesResponse { messages }))
+    Json(PushMessagesResponse { messages })
 }
-
-/// Console API error.
-#[derive(Debug)]
-pub enum ConsoleError {
-    Internal(String),
-}
-
-impl IntoResponse for ConsoleError {
-    fn into_response(self) -> Response {
-        let (status, message) = match self {
-            ConsoleError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-        };
-
-        let body = Json(serde_json::json!({ "detail": message }));
-        (status, body).into_response()
-    }
-}
-
-impl std::fmt::Display for ConsoleError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConsoleError::Internal(msg) => write!(f, "Internal error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for ConsoleError {}
 
 /// Create the console router.
 pub fn create_console_router<S>() -> axum::Router<S>
@@ -176,8 +147,7 @@ mod tests {
     async fn test_get_push_messages_no_session() {
         let query = PushMessagesQuery { session_id: None };
         // This should work even with no messages
-        let result = get_push_messages(Query(query)).await;
-        assert!(result.is_ok());
+        let _ = get_push_messages(Query(query)).await;
     }
 
     #[tokio::test]

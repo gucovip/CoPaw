@@ -20,6 +20,7 @@ pub enum JobRepoError {
     JsonParse(String),
 
     #[error("Job not found: {0}")]
+    #[allow(dead_code)]
     NotFound(String),
 }
 
@@ -49,6 +50,7 @@ impl JobRepository {
     }
 
     /// Get the path to the jobs.json file
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn path(&self) -> &Path {
         &self.path
     }

@@ -31,6 +31,9 @@ futures = "0.3"
 lazy_static = "1.5"
 zip = "2.1"
 tokio-util = { version = "0.7", features = ["io"] }
+dirs = "5"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+async-stream = "0.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

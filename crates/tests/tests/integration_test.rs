@@ -15,10 +15,8 @@ use copaw_agents::react::{MockLLMProvider, MockTool, ReActAgent};
 use copaw_core::agent::{Agent, AgentError};
 use copaw_core::channel::{Channel, ChannelError, ChannelType, Metadata};
 use copaw_core::llm::{LLMProvider, ToolChoice, ToolSchema, Usage};
-use copaw_core::message::{
-    ContentPart, Message, MessageRole, ToolOutput,
-};
 use copaw_core::memory::{InMemoryMemory, Memory};
+use copaw_core::message::{ContentPart, Message, MessageRole, ToolOutput};
 use copaw_core::tool::{Tool, ToolError, Toolkit};
 use copaw_tools::{FileTool, ShellTool};
 use serde_json::json;
@@ -52,11 +50,7 @@ fn test_message_with_parts_serialization() {
 
 #[test]
 fn test_message_tool_use_serialization() {
-    let tool_use = ContentPart::tool_use(
-        "call_123",
-        "search",
-        json!({"query": "test search"}),
-    );
+    let tool_use = ContentPart::tool_use("call_123", "search", json!({"query": "test search"}));
     let msg = Message::assistant(vec![tool_use]);
     let json = serde_json::to_string(&msg).unwrap();
     let parsed: Message = serde_json::from_str(&json).unwrap();
@@ -226,14 +220,8 @@ fn test_toolkit_duplicate_registration_fails() {
 async fn test_memory_add_and_retrieve() {
     let mut memory = InMemoryMemory::new();
 
-    memory
-        .add(Message::user("Hello"))
-        .await
-        .unwrap();
-    memory
-        .add(Message::assistant("Hi there"))
-        .await
-        .unwrap();
+    memory.add(Message::user("Hello")).await.unwrap();
+    memory.add(Message::assistant("Hi there")).await.unwrap();
 
     let all = memory.get_all();
     assert_eq!(all.len(), 2);
@@ -254,10 +242,7 @@ async fn test_memory_conversation_flow() {
         .add(Message::assistant("I'll check the weather for you."))
         .await
         .unwrap();
-    memory
-        .add(Message::user("Thanks!"))
-        .await
-        .unwrap();
+    memory.add(Message::user("Thanks!")).await.unwrap();
     memory
         .add(Message::assistant("You're welcome!"))
         .await
@@ -271,10 +256,7 @@ async fn test_memory_conversation_flow() {
         messages[0].content().as_text().unwrap(),
         "What's the weather?"
     );
-    assert_eq!(
-        messages[3].content().as_text().unwrap(),
-        "You're welcome!"
-    );
+    assert_eq!(messages[3].content().as_text().unwrap(), "You're welcome!");
 }
 
 #[tokio::test]
@@ -284,15 +266,14 @@ async fn test_memory_token_count_accumulates() {
     let initial_count = memory.token_count();
     assert_eq!(initial_count, 0);
 
-    memory
-        .add(Message::user("Short message"))
-        .await
-        .unwrap();
+    memory.add(Message::user("Short message")).await.unwrap();
     let count1 = memory.token_count();
     assert!(count1 > 0);
 
     memory
-        .add(Message::assistant("This is a much longer response that should increase the token count"))
+        .add(Message::assistant(
+            "This is a much longer response that should increase the token count",
+        ))
         .await
         .unwrap();
     let count2 = memory.token_count();
@@ -321,10 +302,7 @@ async fn test_memory_get_recent() {
 async fn test_memory_clear() {
     let mut memory = InMemoryMemory::new();
 
-    memory
-        .add(Message::user("test"))
-        .await
-        .unwrap();
+    memory.add(Message::user("test")).await.unwrap();
     assert_eq!(memory.len(), 1);
 
     memory.clear().await.unwrap();
@@ -382,7 +360,7 @@ async fn test_llm_provider_with_tools() {
     impl LLMProvider for TestLLM {
         async fn chat_completion(
             &self,
-            messages: Vec<Message>,
+            _messages: Vec<Message>,
             tools: Option<Vec<ToolSchema>>,
             tool_choice: Option<ToolChoice>,
         ) -> Result<copaw_core::llm::LLMResponse, copaw_core::llm::LLMError> {
@@ -464,14 +442,8 @@ async fn test_agent_memory_integration() {
     let mut agent = ReActAgent::new("test_agent", provider, "You are helpful");
 
     // Send multiple messages
-    agent
-        .reply(Message::user("First message"))
-        .await
-        .unwrap();
-    agent
-        .reply(Message::user("Second message"))
-        .await
-        .unwrap();
+    agent.reply(Message::user("First message")).await.unwrap();
+    agent.reply(Message::user("Second message")).await.unwrap();
 
     // Check memory contains conversation
     let memory = agent.memory().get_all();
@@ -511,14 +483,8 @@ async fn test_agent_preserves_conversation_history() {
     let mut agent = ReActAgent::new("test_agent", provider, "You are helpful");
 
     // First conversation
-    agent
-        .reply(Message::user("What is 2+2?"))
-        .await
-        .unwrap();
-    agent
-        .reply(Message::user("What about 3+3?"))
-        .await
-        .unwrap();
+    agent.reply(Message::user("What is 2+2?")).await.unwrap();
+    agent.reply(Message::user("What about 3+3?")).await.unwrap();
 
     // Check memory is preserved
     let memory = agent.memory().get_all();
@@ -713,10 +679,7 @@ async fn test_channel_send_operations() {
         channel_type: ChannelType::Telegram,
     };
 
-    channel
-        .send_text("@user", "Hello!", None)
-        .await
-        .unwrap();
+    channel.send_text("@user", "Hello!", None).await.unwrap();
 
     let parts = vec![
         ContentPart::text("Text message"),
@@ -760,7 +723,9 @@ async fn test_tool_error_propagation() {
             json!({})
         }
         async fn execute(&self, _: serde_json::Value) -> Result<String, ToolError> {
-            Err(ToolError::ExecutionFailed("Intentional failure".to_string()))
+            Err(ToolError::ExecutionFailed(
+                "Intentional failure".to_string(),
+            ))
         }
     }
 
@@ -777,11 +742,7 @@ async fn test_tool_error_propagation() {
 async fn test_end_to_end_conversation() {
     // Create a complete agent with tools
     let provider = Arc::new(MockLLMProvider::new("I can help with that!"));
-    let mut agent = ReActAgent::new(
-        "copaw",
-        provider,
-        "You are CoPaw, a helpful AI assistant.",
-    );
+    let mut agent = ReActAgent::new("copaw", provider, "You are CoPaw, a helpful AI assistant.");
 
     // Add some tools
     agent
@@ -799,7 +760,10 @@ async fn test_end_to_end_conversation() {
     let response1 = agent.reply(Message::user("Hello CoPaw!")).await.unwrap();
     assert_eq!(response1.role(), &MessageRole::Assistant);
 
-    let response2 = agent.reply(Message::user("What can you do?")).await.unwrap();
+    let response2 = agent
+        .reply(Message::user("What can you do?"))
+        .await
+        .unwrap();
     assert_eq!(response2.role(), &MessageRole::Assistant);
 
     // Verify memory accumulated
@@ -824,9 +788,7 @@ async fn test_agent_with_file_and_shell_tools() {
     agent
         .add_tool(Box::new(ShellTool::new(tmp.path())))
         .unwrap();
-    agent
-        .add_tool(Box::new(FileTool::new(tmp.path())))
-        .unwrap();
+    agent.add_tool(Box::new(FileTool::new(tmp.path()))).unwrap();
 
     // Verify tools are registered
     assert_eq!(agent.toolkit().len(), 2);
@@ -834,7 +796,10 @@ async fn test_agent_with_file_and_shell_tools() {
     assert!(agent.toolkit().get("file_operations").is_some());
 
     // Send a message
-    let response = agent.reply(Message::user("Create a test file")).await.unwrap();
+    let response = agent
+        .reply(Message::user("Create a test file"))
+        .await
+        .unwrap();
     assert_eq!(response.role(), &MessageRole::Assistant);
 }
 

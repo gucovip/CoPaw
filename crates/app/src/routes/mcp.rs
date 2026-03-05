@@ -12,7 +12,6 @@ use axum::{
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 /// State for MCP routes
 #[derive(Clone)]
@@ -23,10 +22,6 @@ pub struct McpState {
 impl McpState {
     pub fn new(config_path: Option<PathBuf>) -> Self {
         Self { config_path }
-    }
-
-    pub fn get_config_path(&self) -> PathBuf {
-        self.config_path.clone().unwrap_or_else(copaw_config::get_config_path)
     }
 
     pub fn manager(&self) -> McpManager {
@@ -99,13 +94,10 @@ where
     S: HasMcpState + Clone + Send + Sync + 'static,
 {
     let manager = state.mcp_state().manager();
-    let client = manager
-        .get_client(&client_key)
-        .await
-        .map_err(|e| match e {
-            McpError::NotFound(_) => McpRouteError::NotFound(e.to_string()),
-            _ => McpRouteError::Internal(e.to_string()),
-        })?;
+    let client = manager.get_client(&client_key).await.map_err(|e| match e {
+        McpError::NotFound(_) => McpRouteError::NotFound(e.to_string()),
+        _ => McpRouteError::Internal(e.to_string()),
+    })?;
 
     Ok(Json(serde_json::to_value(client).unwrap()))
 }
@@ -161,16 +153,31 @@ where
         updates.insert("name".to_string(), serde_json::to_value(name).unwrap());
     }
     if let Some(description) = req.description {
-        updates.insert("description".to_string(), serde_json::to_value(description).unwrap());
+        updates.insert(
+            "description".to_string(),
+            serde_json::to_value(description).unwrap(),
+        );
     }
     if let Some(enabled) = req.enabled {
-        updates.insert("enabled".to_string(), serde_json::to_value(enabled).unwrap());
+        updates.insert(
+            "enabled".to_string(),
+            serde_json::to_value(enabled).unwrap(),
+        );
+    }
+    if let Some(transport) = req.transport {
+        updates.insert(
+            "transport".to_string(),
+            serde_json::to_value(copaw_config::TransportType::normalize(&transport)).unwrap(),
+        );
     }
     if let Some(url) = req.url {
         updates.insert("url".to_string(), serde_json::to_value(url).unwrap());
     }
     if let Some(command) = req.command {
-        updates.insert("command".to_string(), serde_json::to_value(command).unwrap());
+        updates.insert(
+            "command".to_string(),
+            serde_json::to_value(command).unwrap(),
+        );
     }
     if let Some(cwd) = req.cwd {
         updates.insert("cwd".to_string(), serde_json::to_value(cwd).unwrap());
@@ -182,7 +189,10 @@ where
         updates.insert("env".to_string(), serde_json::to_value(env).unwrap());
     }
     if let Some(headers) = req.headers {
-        updates.insert("headers".to_string(), serde_json::to_value(headers).unwrap());
+        updates.insert(
+            "headers".to_string(),
+            serde_json::to_value(headers).unwrap(),
+        );
     }
 
     let result = manager
@@ -270,9 +280,17 @@ where
 
     axum::Router::new()
         .route("/", get(list_mcp_clients::<S>).post(create_mcp_client::<S>))
-        .route("/:client_key", get(get_mcp_client::<S>).put(update_mcp_client::<S>).delete(delete_mcp_client::<S>))
+        .route(
+            "/:client_key",
+            get(get_mcp_client::<S>)
+                .put(update_mcp_client::<S>)
+                .delete(delete_mcp_client::<S>),
+        )
         .route("/:client_key/test", post(test_mcp_client::<S>))
-        .route("/:client_key/toggle", axum::routing::patch(toggle_mcp_client::<S>))
+        .route(
+            "/:client_key/toggle",
+            axum::routing::patch(toggle_mcp_client::<S>),
+        )
 }
 
 #[cfg(test)]
@@ -286,7 +304,9 @@ mod tests {
         let path = temp_file.path().to_path_buf();
         let _ = temp_file.into_temp_path();
 
-        copaw_config::save_config(&config, Some(&path)).await.unwrap();
+        copaw_config::save_config(&config, Some(&path))
+            .await
+            .unwrap();
         McpState::new(Some(path))
     }
 

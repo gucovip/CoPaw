@@ -1,3 +1,3 @@
 pub mod chat_repo;
 
-pub use chat_repo::{ChatRepository, ChatRepositoryError};
+pub use chat_repo::ChatRepository;

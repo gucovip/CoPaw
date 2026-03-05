@@ -267,10 +267,18 @@ pub struct ChatHistory {
 /// Chat message (simplified from AgentScope Message).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
+    /// Message id
+    pub id: String,
     /// Message role (user, assistant, system)
     pub role: String,
-    /// Message content
-    pub content: String,
+    /// Message type (message, reasoning, plugin_call, plugin_call_output)
+    #[serde(rename = "type")]
+    pub message_type: String,
+    /// Message content blocks
+    pub content: Vec<serde_json::Value>,
+    /// Optional message metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     /// Optional message name
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -430,8 +438,11 @@ mod tests {
     #[test]
     fn test_chat_message_serialization() {
         let msg = ChatMessage {
+            id: "msg-1".to_string(),
             role: "user".to_string(),
-            content: "Hello".to_string(),
+            message_type: "message".to_string(),
+            content: vec![serde_json::json!({"type":"text","text":"Hello"})],
+            metadata: None,
             name: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -600,12 +611,14 @@ pub struct EnvVar {
 
 /// Job list response
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct JobListResponse {
     pub jobs: Vec<crate::crons::CronJobSpec>,
 }
 
 /// Create job response
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct CreateJobResponse {
     pub job: crate::crons::CronJobSpec,
 }

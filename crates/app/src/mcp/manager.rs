@@ -1,11 +1,10 @@
 // -*- coding: utf-8 -*-
 // MCP client manager for managing MCP client lifecycle
 
-use copaw_config::{load_config, save_config, MCPClientConfig, MCPConfig};
+use copaw_config::{load_config, save_config, MCPClientConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, info};
 
@@ -127,7 +126,9 @@ impl McpManager {
 
     /// Get the config path
     fn get_config_path(&self) -> PathBuf {
-        self.config_path.clone().unwrap_or_else(copaw_config::get_config_path)
+        self.config_path
+            .clone()
+            .unwrap_or_else(copaw_config::get_config_path)
     }
 
     /// List all MCP clients
@@ -367,7 +368,10 @@ mod tests {
     #[tokio::test]
     async fn test_mask_value() {
         assert_eq!(mask_value("short"), "*****");
-        assert_eq!(mask_value("sk-proj-1234567890abcdefghij1234"), "sk-*************************1234");
+        assert_eq!(
+            mask_value("sk-proj-1234567890abcdefghij1234"),
+            "sk-*************************1234"
+        );
         assert_eq!(mask_value("my-api-key-value"), "my-*********alue");
     }
 
@@ -417,7 +421,10 @@ mod tests {
             cwd: String::new(),
         };
 
-        let result = manager.create_client("test_client", new_client).await.unwrap();
+        let result = manager
+            .create_client("test_client", new_client)
+            .await
+            .unwrap();
         assert_eq!(result.key, "test_client");
         assert_eq!(result.name, "Test MCP");
     }
@@ -454,7 +461,10 @@ mod tests {
             name: "To Delete".to_string(),
             ..Default::default()
         };
-        manager.create_client("to_delete", new_client).await.unwrap();
+        manager
+            .create_client("to_delete", new_client)
+            .await
+            .unwrap();
 
         // Then delete it
         let result = manager.delete_client("to_delete").await;

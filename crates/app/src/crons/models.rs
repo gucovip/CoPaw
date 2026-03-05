@@ -46,7 +46,10 @@ impl ScheduleSpec {
             }
             4 => {
                 // treat as: hour dom month dow -> 0 minute hour dom month dow
-                Ok(format!("0 0 {} {} {} {}", parts[0], parts[1], parts[2], parts[3]))
+                Ok(format!(
+                    "0 0 {} {} {} {}",
+                    parts[0], parts[1], parts[2], parts[3]
+                ))
             }
             3 => {
                 // treat as: dom month dow -> 0 0 minute dom month dow

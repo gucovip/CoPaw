@@ -194,7 +194,10 @@ fn extract_python_routes_from_file(
     router_prefix: &str,
 ) -> Vec<Route> {
     let content = fs::read_to_string(file).expect("failed reading python file");
-    let re = Regex::new(r"(?m)^\s*@(?P<obj>app|router)\.(?P<method>get|post|put|delete|patch|api_route)\s*\(").unwrap();
+    let re = Regex::new(
+        r"(?m)^\s*@(?P<obj>app|router)\.(?P<method>get|post|put|delete|patch|api_route)\s*\(",
+    )
+    .unwrap();
     let string_arg_re = Regex::new(r#"^\s*[\"']([^\"']*)[\"']"#).unwrap();
     let kw_path_re = Regex::new(r#"\bpath\s*=\s*[\"']([^\"']*)[\"']"#).unwrap();
     let methods_re = Regex::new(r"\bmethods\s*=\s*\[([^\]]*)\]").unwrap();
@@ -265,8 +268,16 @@ fn collect_python_api_routes() -> Vec<Route> {
     let root = repo_root();
     let mut files: Vec<(PathBuf, String, bool)> = vec![
         (root.join("src/copaw/app/_app.py"), "".to_string(), false),
-        (root.join("src/copaw/app/crons/api.py"), "/api".to_string(), true),
-        (root.join("src/copaw/app/runner/api.py"), "/api".to_string(), true),
+        (
+            root.join("src/copaw/app/crons/api.py"),
+            "/api".to_string(),
+            true,
+        ),
+        (
+            root.join("src/copaw/app/runner/api.py"),
+            "/api".to_string(),
+            true,
+        ),
     ];
 
     let routers_dir = root.join("src/copaw/app/routers");
@@ -367,7 +378,10 @@ fn collect_rust_routes() -> Vec<Route> {
         ("crates/app/src/routes/envs.rs", "/api/envs"),
         ("crates/app/src/routes/skills.rs", "/api/skills"),
         ("crates/app/src/routes/local_models.rs", "/api/local-models"),
-        ("crates/app/src/routes/ollama_models.rs", "/api/ollama-models"),
+        (
+            "crates/app/src/routes/ollama_models.rs",
+            "/api/ollama-models",
+        ),
         ("crates/app/src/routes/workspace.rs", "/api/workspace"),
         ("crates/app/src/routes/console.rs", "/api/console"),
         ("crates/app/src/routes/agent.rs", "/api/agent"),

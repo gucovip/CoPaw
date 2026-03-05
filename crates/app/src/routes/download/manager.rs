@@ -54,6 +54,7 @@ pub struct DownloadResult {
 #[derive(Clone)]
 pub struct DownloadManager {
     tasks: Arc<RwLock<HashMap<String, DownloadTask>>>,
+    #[allow(dead_code)]
     models_dir: PathBuf,
 }
 
@@ -67,6 +68,7 @@ impl DownloadManager {
     }
 
     /// Get the models directory.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn models_dir(&self) -> &Path {
         &self.models_dir
     }
@@ -95,11 +97,15 @@ impl DownloadManager {
             progress: 0.0,
         };
 
-        self.tasks.write().await.insert(task_id.clone(), task.clone());
+        self.tasks
+            .write()
+            .await
+            .insert(task_id.clone(), task.clone());
         task
     }
 
     /// Get a task by ID.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub async fn get_task(&self, task_id: &str) -> Option<DownloadTask> {
         self.tasks.read().await.get(task_id).cloned()
     }
@@ -110,9 +116,7 @@ impl DownloadManager {
         let tasks: Vec<DownloadTask> = tasks.values().cloned().collect();
 
         if let Some(backend) = backend {
-            tasks.into_iter()
-                .filter(|t| t.backend == backend)
-                .collect()
+            tasks.into_iter().filter(|t| t.backend == backend).collect()
         } else {
             tasks
         }
@@ -134,6 +138,7 @@ impl DownloadManager {
     }
 
     /// Update task with error.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub async fn update_error(&self, task_id: &str, error: String) -> Option<DownloadTask> {
         let mut tasks = self.tasks.write().await;
         let task = tasks.get_mut(task_id)?;
@@ -146,7 +151,11 @@ impl DownloadManager {
     }
 
     /// Update task with result.
-    pub async fn update_result(&self, task_id: &str, result: DownloadResult) -> Option<DownloadTask> {
+    pub async fn update_result(
+        &self,
+        task_id: &str,
+        result: DownloadResult,
+    ) -> Option<DownloadTask> {
         let mut tasks = self.tasks.write().await;
         let task = tasks.get_mut(task_id)?;
 
@@ -159,6 +168,7 @@ impl DownloadManager {
     }
 
     /// Update task progress.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub async fn update_progress(&self, task_id: &str, progress: f32) -> Option<DownloadTask> {
         let mut tasks = self.tasks.write().await;
         let task = tasks.get_mut(task_id)?;
@@ -329,9 +339,7 @@ mod tests {
             .await;
 
         let error_msg = "Download failed".to_string();
-        let updated = manager
-            .update_error(&task.task_id, error_msg.clone())
-            .await;
+        let updated = manager.update_error(&task.task_id, error_msg.clone()).await;
 
         assert!(updated.is_some());
         let updated_task = updated.unwrap();
@@ -362,9 +370,7 @@ mod tests {
             display_name: "Model (model.gguf)".to_string(),
         };
 
-        let updated = manager
-            .update_result(&task.task_id, result.clone())
-            .await;
+        let updated = manager.update_result(&task.task_id, result.clone()).await;
 
         assert!(updated.is_some());
         let updated_task = updated.unwrap();
@@ -385,16 +391,12 @@ mod tests {
             )
             .await;
 
-        let updated = manager
-            .update_progress(&task.task_id, 50.0)
-            .await;
+        let updated = manager.update_progress(&task.task_id, 50.0).await;
         assert!(updated.is_some());
         assert_eq!(updated.unwrap().progress, 50.0);
 
         // Test clamping
-        let updated = manager
-            .update_progress(&task.task_id, 150.0)
-            .await;
+        let updated = manager.update_progress(&task.task_id, 150.0).await;
         assert_eq!(updated.unwrap().progress, 100.0);
     }
 

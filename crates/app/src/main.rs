@@ -11,18 +11,15 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::get,
     Router,
 };
-use routes::{
-    AgentState, ChatsState, ConfigState, CronState, DownloadManager, EnvsState,
-    HasChatsState, HasConfigState, HasCronState, HasEnvsState, HasMcpState,
-    HasModelsState, LocalModelsState, McpState, ModelsState, OllamaModelsState,
-    LOCAL_MODELS_DIR,
-};
+use copaw_config::get_working_dir;
 use copaw_providers::{ProviderRegistry, ProviderStore};
-use copaw_channels::ChannelManager;
-use copaw_config::{get_chats_path, get_working_dir};
+use routes::{
+    AgentState, ChatsState, ConfigState, CronState, DownloadManager, EnvsState, HasConfigState,
+    HasCronState, HasEnvsState, HasMcpState, LocalModelsState, McpState, ModelsState,
+    OllamaModelsState, LOCAL_MODELS_DIR,
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -34,7 +31,6 @@ use tower_http::{
 };
 use tracing::{info, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_ADDRESS: &str = "127.0.0.1:8088";
@@ -59,12 +55,6 @@ impl HasConfigState for AppState {
     }
 }
 
-impl HasModelsState for AppState {
-    fn models_state(&self) -> &ModelsState {
-        &self.models_state
-    }
-}
-
 impl HasCronState for AppState {
     fn cron_state(&self) -> &CronState {
         &self.cron_state
@@ -80,12 +70,6 @@ impl HasMcpState for AppState {
 impl HasEnvsState for AppState {
     fn envs_state(&self) -> &EnvsState {
         &self.envs_state
-    }
-}
-
-impl HasChatsState for AppState {
-    fn chats_state(&self) -> &ChatsState {
-        &self.chats_state
     }
 }
 
@@ -278,7 +262,10 @@ fn build_router(console_static_dir: Option<PathBuf>) -> Router {
     let registry = Arc::new(ProviderRegistry::new());
     let providers_path = ProviderStore::default_path();
     let store = Arc::new(ProviderStore::new(providers_path, registry.clone()));
-    let models_state = ModelsState { registry: registry.clone(), store: store.clone() };
+    let models_state = ModelsState {
+        registry: registry.clone(),
+        store: store.clone(),
+    };
 
     // Initialize MCP and Envs states
     let mcp_state = McpState::new(None);
@@ -293,7 +280,17 @@ fn build_router(console_static_dir: Option<PathBuf>) -> Router {
     let local_models_state = LocalModelsState::new(registry.clone(), store.clone(), models_dir);
 
     // Initialize Ollama models state (shares download manager with local models)
-    let ollama_models_state = OllamaModelsState::new(registry, store, download_manager);
+    let ollama_models_state =
+        OllamaModelsState::new(registry.clone(), store.clone(), download_manager);
+
+    // Initialize chats state
+    let chats_repo = crate::repo::ChatRepository::new().expect("Failed to create chat repository");
+    let chat_manager = Arc::new(crate::runner::chat_manager::ChatManager::with_repository(
+        chats_repo,
+    ));
+    let chats_state = ChatsState {
+        manager: chat_manager.clone(),
+    };
 
     // Initialize agent state
     let working_dir = get_working_dir();
@@ -301,13 +298,12 @@ fn build_router(console_static_dir: Option<PathBuf>) -> Router {
         copaw_agents::AgentFileManager::with_working_dir(&working_dir)
             .expect("Failed to create agent file manager"),
     );
-    let agent_state = AgentState { file_manager };
-
-    // Initialize chats state
-    let chats_repo = crate::repo::ChatRepository::new()
-        .expect("Failed to create chat repository");
-    let chat_manager = Arc::new(crate::runner::chat_manager::ChatManager::with_repository(chats_repo));
-    let chats_state = ChatsState { manager: chat_manager };
+    let agent_state = AgentState {
+        file_manager,
+        registry: registry.clone(),
+        store: store.clone(),
+        chat_manager,
+    };
 
     let state = AppState {
         console_static_dir,
@@ -355,11 +351,13 @@ fn build_router(console_static_dir: Option<PathBuf>) -> Router {
     app_router = app_router.nest("/api/skills", skills_router);
 
     // Add Local Models router
-    let local_models_router = routes::create_local_models_router().with_state(state.local_models_state.clone());
+    let local_models_router =
+        routes::create_local_models_router().with_state(state.local_models_state.clone());
     app_router = app_router.nest("/api/local-models", local_models_router);
 
     // Add Ollama Models router
-    let ollama_models_router = routes::create_ollama_models_router().with_state(state.ollama_models_state.clone());
+    let ollama_models_router =
+        routes::create_ollama_models_router().with_state(state.ollama_models_state.clone());
     app_router = app_router.nest("/api/ollama-models", ollama_models_router);
 
     // Add Workspace router (stateless)
@@ -468,7 +466,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use axum::http::Request;
     use tower::ServiceExt;
 
@@ -601,26 +598,39 @@ mod tests {
             ProviderStore::default_path(),
             registry.clone(),
         ));
-        let models_state = ModelsState { registry: registry.clone(), store: store.clone() };
+        let models_state = ModelsState {
+            registry: registry.clone(),
+            store: store.clone(),
+        };
         let models_dir = PathBuf::from("/tmp/models");
         let download_manager = Arc::new(DownloadManager::new(models_dir.clone()));
-        let local_models_state = LocalModelsState::new(registry.clone(), store.clone(), models_dir.clone());
-        let ollama_models_state = OllamaModelsState::new(registry, store, download_manager);
+        let local_models_state =
+            LocalModelsState::new(registry.clone(), store.clone(), models_dir.clone());
+        let ollama_models_state =
+            OllamaModelsState::new(registry.clone(), store.clone(), download_manager);
 
         // Create temp directory for test
         let temp_dir = tempfile::TempDir::new().unwrap();
 
-        // Initialize agent state with temp directory
-        let file_manager = Arc::new(
-            copaw_agents::AgentFileManager::with_working_dir(temp_dir.path()).unwrap(),
-        );
-        let agent_state = AgentState { file_manager };
-
         // Initialize chats state with temp repository
         let chats_repo_path = temp_dir.path().join("chats.json");
         let chats_repo = crate::repo::ChatRepository::with_path(chats_repo_path).unwrap();
-        let chat_manager = Arc::new(crate::runner::chat_manager::ChatManager::with_repository(chats_repo));
-        let chats_state = ChatsState { manager: chat_manager };
+        let chat_manager = Arc::new(crate::runner::chat_manager::ChatManager::with_repository(
+            chats_repo,
+        ));
+        let chats_state = ChatsState {
+            manager: chat_manager.clone(),
+        };
+
+        // Initialize agent state with temp directory
+        let file_manager =
+            Arc::new(copaw_agents::AgentFileManager::with_working_dir(temp_dir.path()).unwrap());
+        let agent_state = AgentState {
+            file_manager,
+            registry: registry.clone(),
+            store: store.clone(),
+            chat_manager,
+        };
 
         let state = AppState {
             console_static_dir: Some(PathBuf::from("/tmp/console")),

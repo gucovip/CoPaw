@@ -74,10 +74,14 @@ impl ChatManager {
     /// Create a new chat.
     pub async fn create(&self, req: CreateChatRequest) -> Result<ChatSpec, ChatManagerError> {
         if req.session_id.is_empty() {
-            return Err(ChatManagerError::InvalidInput("session_id is required".to_string()));
+            return Err(ChatManagerError::InvalidInput(
+                "session_id is required".to_string(),
+            ));
         }
         if req.user_id.is_empty() {
-            return Err(ChatManagerError::InvalidInput("user_id is required".to_string()));
+            return Err(ChatManagerError::InvalidInput(
+                "user_id is required".to_string(),
+            ));
         }
 
         let now = chrono::Utc::now().to_rfc3339();
@@ -134,12 +138,22 @@ impl ChatManager {
         if ids.is_empty() {
             return Ok(0);
         }
-        self.repo.delete_batch(&ids).await.map_err(ChatManagerError::from)
+        self.repo
+            .delete_batch(&ids)
+            .await
+            .map_err(ChatManagerError::from)
     }
 
     /// Find a chat by session ID.
-    pub async fn find_by_session(&self, session_id: &str) -> Result<Option<ChatSpec>, ChatManagerError> {
-        self.repo.find_by_session(session_id).await.map_err(ChatManagerError::from)
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub async fn find_by_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<ChatSpec>, ChatManagerError> {
+        self.repo
+            .find_by_session(session_id)
+            .await
+            .map_err(ChatManagerError::from)
     }
 }
 

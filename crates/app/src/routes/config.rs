@@ -6,8 +6,7 @@ use axum::{
     Router,
 };
 use copaw_config::{
-    get_config_path, load_config, save_config, ChannelConfig, CoPawConfig, ConsoleConfig,
-    DingTalkConfig, DiscordConfig, FeishuConfig, HeartbeatConfig, QQConfig, TelegramConfig,
+    get_config_path, load_config, save_config, ChannelConfig, CoPawConfig, HeartbeatConfig,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -89,37 +88,8 @@ impl std::fmt::Display for ConfigRouteError {
 
 impl std::error::Error for ConfigRouteError {}
 
-/// Channel configuration list response
-#[derive(Serialize)]
-struct ChannelListResponse {
-    feishu: bool,
-    discord: bool,
-    dingtalk: bool,
-    telegram: bool,
-    qq: bool,
-    imessage: bool,
-    console: bool,
-    #[serde(flatten)]
-    extra: Value,
-}
-
-/// Channel configuration type
-#[derive(Serialize)]
-#[serde(tag = "type", content = "config")]
-enum ChannelConfigResponse {
-    Feishu(FeishuConfig),
-    Discord(DiscordConfig),
-    DingTalk(DingTalkConfig),
-    Telegram(TelegramConfig),
-    QQ(QQConfig),
-    IMessage(Value), // IMessageChannelConfig doesn't have enabled flag
-    Console(ConsoleConfig),
-}
-
 /// List available channel configurations
-async fn list_channels<S>(
-    State(state): State<S>,
-) -> Result<Json<ChannelListResponse>, ConfigRouteError>
+async fn list_channels<S>(State(state): State<S>) -> Result<Json<ChannelConfig>, ConfigRouteError>
 where
     S: HasConfigState,
 {
@@ -127,46 +97,27 @@ where
         .await
         .map_err(|e| ConfigRouteError::LoadFailed(e.to_string()))?;
 
-    let channels = ChannelListResponse {
-        feishu: config.channels.feishu.base.enabled,
-        discord: config.channels.discord.base.enabled,
-        dingtalk: config.channels.dingtalk.base.enabled,
-        telegram: config.channels.telegram.base.enabled,
-        qq: config.channels.qq.base.enabled,
-        imessage: config.channels.imessage.base.enabled,
-        console: config.channels.console.enabled,
-        extra: config.channels.extra,
-    };
-
-    Ok(Json(channels))
+    Ok(Json(config.channels))
 }
 
 /// List available channel types
-async fn list_channel_types() -> Json<Value> {
-    let types = serde_json::json!({
-        "channels": [
-            {"type": "feishu", "name": "Feishu/Lark"},
-            {"type": "discord", "name": "Discord"},
-            {"type": "dingtalk", "name": "DingTalk"},
-            {"type": "telegram", "name": "Telegram"},
-            {"type": "qq", "name": "QQ"},
-            {"type": "imessage", "name": "iMessage"},
-            {"type": "console", "name": "Console"}
-        ]
-    });
-    Json(types)
+async fn list_channel_types() -> Json<Vec<String>> {
+    Json(vec![
+        "feishu".to_string(),
+        "discord".to_string(),
+        "dingtalk".to_string(),
+        "telegram".to_string(),
+        "qq".to_string(),
+        "imessage".to_string(),
+        "console".to_string(),
+    ])
 }
 
 /// Update channels configuration
-#[derive(Deserialize)]
-struct UpdateChannelsRequest {
-    channels: ChannelConfig,
-}
-
 async fn put_channels<S>(
     State(state): State<S>,
-    Json(req): Json<UpdateChannelsRequest>,
-) -> Result<Json<Value>, ConfigRouteError>
+    Json(channels): Json<ChannelConfig>,
+) -> Result<Json<ChannelConfig>, ConfigRouteError>
 where
     S: HasConfigState,
 {
@@ -174,20 +125,20 @@ where
         .await
         .map_err(|e| ConfigRouteError::LoadFailed(e.to_string()))?;
 
-    config.channels = req.channels;
+    config.channels = channels.clone();
 
     save_config(&config, Some(&get_config_path_from_state(&state)))
         .await
         .map_err(|e| ConfigRouteError::SaveFailed(e.to_string()))?;
 
-    Ok(Json(serde_json::json!({"success": true})))
+    Ok(Json(channels))
 }
 
 /// Get specific channel configuration
 async fn get_channel<S>(
     State(state): State<S>,
     Path(channel_name): Path<String>,
-) -> Result<Json<ChannelConfigResponse>, ConfigRouteError>
+) -> Result<Json<Value>, ConfigRouteError>
 where
     S: HasConfigState,
 {
@@ -196,16 +147,13 @@ where
         .map_err(|e| ConfigRouteError::LoadFailed(e.to_string()))?;
 
     let response = match channel_name.as_str() {
-        "feishu" => ChannelConfigResponse::Feishu(config.channels.feishu),
-        "discord" => ChannelConfigResponse::Discord(config.channels.discord),
-        "dingtalk" => ChannelConfigResponse::DingTalk(config.channels.dingtalk),
-        "telegram" => ChannelConfigResponse::Telegram(config.channels.telegram),
-        "qq" => ChannelConfigResponse::QQ(config.channels.qq),
-        "imessage" => ChannelConfigResponse::IMessage(
-            serde_json::to_value(&config.channels.imessage)
-                .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?,
-        ),
-        "console" => ChannelConfigResponse::Console(config.channels.console),
+        "feishu" => serde_json::to_value(&config.channels.feishu),
+        "discord" => serde_json::to_value(&config.channels.discord),
+        "dingtalk" => serde_json::to_value(&config.channels.dingtalk),
+        "telegram" => serde_json::to_value(&config.channels.telegram),
+        "qq" => serde_json::to_value(&config.channels.qq),
+        "imessage" => serde_json::to_value(&config.channels.imessage),
+        "console" => serde_json::to_value(&config.channels.console),
         _ => {
             return Err(ConfigRouteError::NotFound(format!(
                 "Unknown channel type: {}",
@@ -213,21 +161,16 @@ where
             )))
         }
     };
+    let response = response.map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
 
     Ok(Json(response))
 }
 
 /// Update specific channel configuration
-#[derive(Deserialize)]
-struct UpdateChannelRequest {
-    #[serde(flatten)]
-    config: Value,
-}
-
 async fn put_channel<S>(
     State(state): State<S>,
     Path(channel_name): Path<String>,
-    Json(req): Json<UpdateChannelRequest>,
+    Json(req): Json<Value>,
 ) -> Result<Json<Value>, ConfigRouteError>
 where
     S: HasConfigState,
@@ -238,31 +181,31 @@ where
 
     match channel_name.as_str() {
         "feishu" => {
-            config.channels.feishu = serde_json::from_value(req.config)
+            config.channels.feishu = serde_json::from_value(req.clone())
                 .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
         }
         "discord" => {
-            config.channels.discord = serde_json::from_value(req.config)
+            config.channels.discord = serde_json::from_value(req.clone())
                 .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
         }
         "dingtalk" => {
-            config.channels.dingtalk = serde_json::from_value(req.config)
+            config.channels.dingtalk = serde_json::from_value(req.clone())
                 .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
         }
         "telegram" => {
-            config.channels.telegram = serde_json::from_value(req.config)
+            config.channels.telegram = serde_json::from_value(req.clone())
                 .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
         }
         "qq" => {
-            config.channels.qq = serde_json::from_value(req.config)
+            config.channels.qq = serde_json::from_value(req.clone())
                 .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
         }
         "imessage" => {
-            config.channels.imessage = serde_json::from_value(req.config)
+            config.channels.imessage = serde_json::from_value(req.clone())
                 .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
         }
         "console" => {
-            config.channels.console = serde_json::from_value(req.config)
+            config.channels.console = serde_json::from_value(req.clone())
                 .map_err(|e| ConfigRouteError::ParseFailed(e.to_string()))?;
         }
         _ => {
@@ -277,7 +220,7 @@ where
         .await
         .map_err(|e| ConfigRouteError::SaveFailed(e.to_string()))?;
 
-    Ok(Json(serde_json::json!({"success": true})))
+    Ok(Json(req))
 }
 
 /// Get heartbeat configuration
@@ -380,7 +323,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Body;
     use tempfile::NamedTempFile;
+    use tower::ServiceExt;
 
     async fn create_test_config() -> PathBuf {
         let config = CoPawConfig::default();
@@ -415,13 +360,14 @@ mod tests {
         assert!(result.is_ok());
 
         let channels = result.unwrap().0;
-        assert!(channels.console); // Console is enabled by default
+        assert!(channels.console.enabled); // Console is enabled by default
     }
 
     #[tokio::test]
     async fn test_list_channel_types() {
         let json = list_channel_types().await;
-        assert!(json["channels"].is_array());
+        assert!(json.contains(&"console".to_string()));
+        assert!(json.contains(&"feishu".to_string()));
     }
 
     #[tokio::test]
@@ -429,10 +375,7 @@ mod tests {
         let config_path = create_test_config().await;
         let state = ConfigState::new(Some(config_path));
 
-        let req = UpdateChannelsRequest {
-            channels: ChannelConfig::default(),
-        };
-
+        let req = ChannelConfig::default();
         let result = put_channels(State(state), Json(req)).await;
         assert!(result.is_ok());
     }
@@ -485,5 +428,31 @@ mod tests {
 
         let result = put_config(State(state), Json(new_config)).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_router_channel_types_returns_array_shape() {
+        let app = create_config_router::<ConfigState>().with_state(ConfigState::new(None));
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/config/channels/types")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(value.is_array(), "channel types response must be an array");
+
+        let channels = value.as_array().unwrap();
+        assert!(channels.iter().any(|v| v == "console"));
     }
 }

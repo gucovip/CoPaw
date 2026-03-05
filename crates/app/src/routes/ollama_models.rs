@@ -1,8 +1,8 @@
 // -*- coding: utf-8 -*-
 // API routes for Ollama model management.
 
-use super::schemas::ProviderInfo;
 use super::download::{DownloadManager, DownloadStatus, DownloadTask};
+use super::schemas::ProviderInfo;
 use axum::{
     extract::{Path as AxumPath, State},
     http::StatusCode,
@@ -10,13 +10,13 @@ use axum::{
 };
 use copaw_providers::{ProviderRegistry, ProviderStore};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Application state for Ollama model routes.
 #[derive(Clone)]
 pub struct OllamaModelsState {
     pub registry: Arc<ProviderRegistry>,
+    #[allow(dead_code)]
     pub store: Arc<ProviderStore>,
     pub download_manager: Arc<DownloadManager>,
 }
@@ -85,9 +85,12 @@ impl From<DownloadTask> for OllamaDownloadTaskResponse {
 #[derive(Debug)]
 pub enum OllamaModelsError {
     NotFound(String),
+    #[allow(dead_code)]
     BadRequest(String),
+    #[allow(dead_code)]
     Internal(String),
     NotImplemented(String),
+    #[allow(dead_code)]
     ServiceUnavailable(String),
 }
 
@@ -141,7 +144,10 @@ pub async fn delete_ollama_model_flat(
     AxumPath(model_name): AxumPath<String>,
 ) -> Result<Json<serde_json::Value>, OllamaModelsError> {
     // Normalize model_name: remove leading slash (Axum wildcard may include it)
-    let model_name = model_name.strip_prefix('/').unwrap_or(&model_name).to_string();
+    let model_name = model_name
+        .strip_prefix('/')
+        .unwrap_or(&model_name)
+        .to_string();
     delete_ollama_model_impl(state, model_name).await
 }
 
@@ -162,7 +168,7 @@ pub async fn list_ollama_providers(
                 is_custom: false,
                 is_local: true,
                 needs_base_url: false,
-                has_api_key: true,
+                has_api_key: false,
                 current_api_key: String::new(),
                 current_base_url: String::new(),
             };
@@ -183,7 +189,7 @@ pub async fn list_provider_ollama_models(
     AxumPath(_provider): AxumPath<String>,
 ) -> Result<Json<Vec<OllamaModelInfo>>, OllamaModelsError> {
     let _provider = _provider; // suppress unused warning
-    // Get completed download tasks for Ollama
+                               // Get completed download tasks for Ollama
     let tasks = state.download_manager.get_tasks(Some("ollama")).await;
     let models: Vec<OllamaModelInfo> = tasks
         .into_iter()
@@ -208,13 +214,18 @@ pub async fn pull_ollama_model(
     JsonExtractor(req): JsonExtractor<OllamaDownloadRequest>,
 ) -> Result<Json<OllamaDownloadTaskResponse>, OllamaModelsError> {
     let _provider = _provider; // suppress unused warning
-    // Clear completed tasks
+                               // Clear completed tasks
     state.download_manager.clear_completed(Some("ollama")).await;
 
     // Create download task (store model name in repo_id)
     let task = state
         .download_manager
-        .create_task(req.name.clone(), None, "ollama".to_string(), "ollama".to_string())
+        .create_task(
+            req.name.clone(),
+            None,
+            "ollama".to_string(),
+            "ollama".to_string(),
+        )
         .await;
 
     // Start background pull
@@ -224,7 +235,9 @@ pub async fn pull_ollama_model(
 
     tokio::spawn(async move {
         // Update status to downloading
-        let _ = manager.update_status(&task_id, DownloadStatus::Downloading).await;
+        let _ = manager
+            .update_status(&task_id, DownloadStatus::Downloading)
+            .await;
 
         // For now, simulate pull and mark as completed
         // TODO: Implement actual Ollama API call
@@ -238,7 +251,7 @@ pub async fn pull_ollama_model(
             filename: model_name.clone(),
             backend: "ollama".to_string(),
             source: "ollama".to_string(),
-            file_size: 0, // Will be filled by actual pull
+            file_size: 0,              // Will be filled by actual pull
             local_path: String::new(), // Ollama manages its own storage
             display_name: model_name.clone(),
         };
@@ -255,7 +268,7 @@ pub async fn get_ollama_model_info(
     AxumPath((_provider, model_name)): AxumPath<(String, String)>,
 ) -> Result<Json<OllamaModelInfo>, OllamaModelsError> {
     let _provider = _provider; // suppress unused warning
-    // Find model in completed downloads
+                               // Find model in completed downloads
     let tasks = state.download_manager.get_tasks(Some("ollama")).await;
     let model = tasks
         .into_iter()
@@ -306,8 +319,10 @@ pub async fn get_ollama_download_status(
     State(state): State<OllamaModelsState>,
 ) -> Json<Vec<OllamaDownloadTaskResponse>> {
     let tasks = state.download_manager.get_tasks(Some("ollama")).await;
-    let responses: Vec<OllamaDownloadTaskResponse> =
-        tasks.into_iter().map(OllamaDownloadTaskResponse::from).collect();
+    let responses: Vec<OllamaDownloadTaskResponse> = tasks
+        .into_iter()
+        .map(OllamaDownloadTaskResponse::from)
+        .collect();
     Json(responses)
 }
 
@@ -368,7 +383,12 @@ async fn pull_ollama_model_impl(
     // Create download task (store model name in repo_id)
     let task = state
         .download_manager
-        .create_task(req.name.clone(), None, "ollama".to_string(), "ollama".to_string())
+        .create_task(
+            req.name.clone(),
+            None,
+            "ollama".to_string(),
+            "ollama".to_string(),
+        )
         .await;
 
     // Start background pull
@@ -378,7 +398,9 @@ async fn pull_ollama_model_impl(
 
     tokio::spawn(async move {
         // Update status to downloading
-        let _ = manager.update_status(&task_id, DownloadStatus::Downloading).await;
+        let _ = manager
+            .update_status(&task_id, DownloadStatus::Downloading)
+            .await;
 
         // For now, simulate pull and mark as completed
         // TODO: Implement actual Ollama API call
@@ -392,7 +414,7 @@ async fn pull_ollama_model_impl(
             filename: model_name.clone(),
             backend: "ollama".to_string(),
             source: "ollama".to_string(),
-            file_size: 0, // Will be filled by actual pull
+            file_size: 0,              // Will be filled by actual pull
             local_path: String::new(), // Ollama manages its own storage
             display_name: model_name.clone(),
         };
@@ -439,10 +461,19 @@ pub fn create_ollama_models_router() -> axum::Router<OllamaModelsState> {
         .route("/download", post(download_ollama_model))
         .route("/*name", delete(delete_ollama_model_flat))
         .route("/providers", get(list_ollama_providers))
-        .route("/providers/:provider/models", get(list_provider_ollama_models))
+        .route(
+            "/providers/:provider/models",
+            get(list_provider_ollama_models),
+        )
         .route("/providers/:provider/pull", post(pull_ollama_model))
-        .route("/providers/:provider/models/:model/info", get(get_ollama_model_info))
-        .route("/providers/:provider/models/:model", delete(delete_ollama_model))
+        .route(
+            "/providers/:provider/models/:model/info",
+            get(get_ollama_model_info),
+        )
+        .route(
+            "/providers/:provider/models/:model",
+            delete(delete_ollama_model),
+        )
         .route("/download-status", get(get_ollama_download_status))
         .route("/download/:task_id", delete(cancel_ollama_download))
 }
@@ -451,6 +482,7 @@ pub fn create_ollama_models_router() -> axum::Router<OllamaModelsState> {
 mod tests {
     use super::*;
     use crate::routes::download::DownloadManager;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     fn create_test_state() -> OllamaModelsState {

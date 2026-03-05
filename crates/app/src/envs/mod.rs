@@ -3,4 +3,4 @@
 
 pub mod store;
 
-pub use store::{EnvError, EnvStore, mask_env_value};
+pub use store::{mask_env_value, EnvError, EnvStore};

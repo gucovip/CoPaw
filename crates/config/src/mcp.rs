@@ -114,8 +114,14 @@ mod tests {
     #[test]
     fn test_transport_type_normalize() {
         assert_eq!(TransportType::normalize("STDIO"), TransportType::Stdio);
-        assert_eq!(TransportType::normalize("streamablehttp"), TransportType::StreamableHttp);
-        assert_eq!(TransportType::normalize("HTTP"), TransportType::StreamableHttp);
+        assert_eq!(
+            TransportType::normalize("streamablehttp"),
+            TransportType::StreamableHttp
+        );
+        assert_eq!(
+            TransportType::normalize("HTTP"),
+            TransportType::StreamableHttp
+        );
         assert_eq!(TransportType::normalize("sse"), TransportType::Sse);
     }
 

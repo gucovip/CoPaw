@@ -9,23 +9,81 @@ use tracing::{debug, warn};
 
 /// Get the default envs.json path
 fn get_envs_json_path() -> PathBuf {
-    // Default to {working_dir}/envs.json; if caller provides a .json path, respect it.
-    let raw = std::env::var("COPAW_WORKING_DIR").unwrap_or_else(|_| "~/.copaw".to_string());
-    let expanded = raw.replace(
-        '~',
-        &std::env::var("HOME").unwrap_or_else(|_| ".".to_string()),
-    );
-    let base: PathBuf = expanded.into();
+    get_secret_dir().join("envs.json")
+}
 
-    if base
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("json"))
-        .unwrap_or(false)
-    {
-        base
-    } else {
-        base.join("envs.json")
+fn expand_home(path: &str) -> PathBuf {
+    if let Some(home) = dirs::home_dir() {
+        if let Some(rest) = path.strip_prefix('~') {
+            return home.join(rest.trim_start_matches('/'));
+        }
+    }
+    PathBuf::from(path)
+}
+
+fn get_working_dir() -> PathBuf {
+    let raw = std::env::var("COPAW_WORKING_DIR").unwrap_or_else(|_| "~/.copaw".to_string());
+    expand_home(&raw)
+}
+
+fn get_secret_dir() -> PathBuf {
+    if let Ok(secret) = std::env::var("COPAW_SECRET_DIR") {
+        return expand_home(&secret);
+    }
+    let working = get_working_dir();
+    PathBuf::from(format!("{}.secret", working.display()))
+}
+
+fn same_path(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(aa), Ok(bb)) => aa == bb,
+        _ => false,
+    }
+}
+
+fn legacy_envs_json_candidates() -> Vec<PathBuf> {
+    vec![
+        PathBuf::from("src/copaw/envs/envs.json"),
+        get_working_dir().join("envs.json"),
+    ]
+}
+
+async fn migrate_legacy_envs_json(path: &Path) {
+    if path.is_file() {
+        return;
+    }
+    if path.exists() && !path.is_file() {
+        warn!(
+            "envs.json path exists but is not a regular file: {}",
+            path.display()
+        );
+        return;
+    }
+
+    for legacy in legacy_envs_json_candidates() {
+        if !legacy.is_file() || same_path(&legacy, path) {
+            continue;
+        }
+
+        if let Some(parent) = path.parent() {
+            if let Err(err) = fs::create_dir_all(parent).await {
+                warn!(
+                    "Failed to create parent directory for envs.json {}: {}",
+                    path.display(),
+                    err
+                );
+                return;
+            }
+        }
+
+        match fs::copy(&legacy, path).await {
+            Ok(_) => return,
+            Err(err) => warn!(
+                "Failed to migrate legacy envs.json from {}: {}",
+                legacy.display(),
+                err
+            ),
+        }
     }
 }
 
@@ -99,12 +157,23 @@ impl EnvStore {
     }
 
     /// Get the envs.json file path
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn get_path(&self) -> &Path {
         &self.path
     }
 
     /// Load environment variables from envs.json
     pub async fn load(&self) -> Result<HashMap<String, String>, EnvError> {
+        migrate_legacy_envs_json(&self.path).await;
+
+        if self.path.exists() && !self.path.is_file() {
+            warn!(
+                "envs.json path exists but is not a regular file: {}",
+                self.path.display()
+            );
+            return Ok(HashMap::new());
+        }
+
         if !self.path.exists() {
             return Ok(HashMap::new());
         }
@@ -137,6 +206,18 @@ impl EnvStore {
 
     /// Save environment variables to envs.json
     pub async fn save(&self, envs: &HashMap<String, String>) -> Result<(), EnvError> {
+        migrate_legacy_envs_json(&self.path).await;
+
+        if self.path.exists() && !self.path.is_file() {
+            return Err(EnvError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "envs.json path exists but is not a regular file: {}",
+                    self.path.display()
+                ),
+            )));
+        }
+
         // Ensure parent directory exists
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).await?;

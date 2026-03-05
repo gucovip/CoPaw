@@ -22,6 +22,32 @@ impl From<Message> for OpenAIMessage {
                 .iter()
                 .filter_map(|p| match p {
                     ContentPart::Text { text } => Some(text.clone()),
+                    ContentPart::Thinking { thinking } => Some(format!("[thinking] {}", thinking)),
+                    ContentPart::ToolUse {
+                        id, name, input, ..
+                    } => Some(format!(
+                        "[tool_use id={}] {}({})",
+                        id,
+                        name,
+                        serde_json::to_string(input).unwrap_or_else(|_| "{}".to_string())
+                    )),
+                    ContentPart::ToolResult { id, name, output } => {
+                        let output_text = match output {
+                            copaw_core::message::ToolOutputVariant::Text(text) => text.clone(),
+                            copaw_core::message::ToolOutputVariant::Blocks(blocks) => blocks
+                                .iter()
+                                .filter_map(|b| match b {
+                                    ContentPart::Text { text } => Some(text.clone()),
+                                    _ => None,
+                                })
+                                .collect::<Vec<_>>()
+                                .join("\n"),
+                        };
+                        Some(format!(
+                            "[tool_result id={}] {} => {}",
+                            id, name, output_text
+                        ))
+                    }
                     _ => None,
                 })
                 .collect::<Vec<_>>()
@@ -486,8 +512,7 @@ mod tests {
         let msg = Message::user(parts);
         let openai_msg = OpenAIMessage::from(msg);
         assert_eq!(openai_msg.role, "user");
-        // Only text parts are concatenated
-        assert_eq!(openai_msg.content, "Hello World");
+        assert_eq!(openai_msg.content, "Hello [thinking] Let me think World");
     }
 
     #[test]

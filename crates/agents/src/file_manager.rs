@@ -103,7 +103,11 @@ impl AgentFileManager {
     /// Write markdown content to a file in the working directory.
     ///
     /// Automatically appends .md extension if not present.
-    pub fn write_working_md(&self, md_name: &str, content: &str) -> Result<(), AgentFileManagerError> {
+    pub fn write_working_md(
+        &self,
+        md_name: &str,
+        content: &str,
+    ) -> Result<(), AgentFileManagerError> {
         let file_path = self.resolve_working_path(md_name)?;
         std::fs::write(&file_path, content)?;
         Ok(())
@@ -144,7 +148,11 @@ impl AgentFileManager {
     /// Write markdown content to a file in the memory directory.
     ///
     /// Automatically appends .md extension if not present.
-    pub fn write_memory_md(&self, md_name: &str, content: &str) -> Result<(), AgentFileManagerError> {
+    pub fn write_memory_md(
+        &self,
+        md_name: &str,
+        content: &str,
+    ) -> Result<(), AgentFileManagerError> {
         let file_path = self.resolve_memory_path(md_name)?;
         std::fs::write(&file_path, content)?;
         Ok(())
@@ -188,8 +196,7 @@ impl AgentFileManager {
     fn list_mds_in_dir(&self, dir: &Path) -> Result<Vec<MdFileMetadata>, AgentFileManagerError> {
         let mut files = Vec::new();
 
-        let entries = std::fs::read_dir(dir)
-            .map_err(|e| AgentFileManagerError::Io(e))?;
+        let entries = std::fs::read_dir(dir).map_err(|e| AgentFileManagerError::Io(e))?;
 
         for entry in entries {
             let entry = entry?;
@@ -301,7 +308,10 @@ mod tests {
         let fm = AgentFileManager::with_working_dir(temp_dir.path()).unwrap();
 
         let result = fm.read_working_md("nonexistent");
-        assert!(matches!(result, Err(AgentFileManagerError::FileNotFound(_))));
+        assert!(matches!(
+            result,
+            Err(AgentFileManagerError::FileNotFound(_))
+        ));
     }
 
     #[test]
@@ -323,7 +333,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let fm = AgentFileManager::with_working_dir(temp_dir.path()).unwrap();
 
-        fm.write_memory_md("memory_test", "# Memory Content").unwrap();
+        fm.write_memory_md("memory_test", "# Memory Content")
+            .unwrap();
         let content = fm.read_memory_md("memory_test").unwrap();
         assert_eq!(content, "# Memory Content");
     }
@@ -349,7 +360,10 @@ mod tests {
         fm.delete_working_md("to_delete").unwrap();
 
         let result = fm.read_working_md("to_delete");
-        assert!(matches!(result, Err(AgentFileManagerError::FileNotFound(_))));
+        assert!(matches!(
+            result,
+            Err(AgentFileManagerError::FileNotFound(_))
+        ));
     }
 
     #[test]
@@ -361,7 +375,10 @@ mod tests {
         fm.delete_memory_md("to_delete").unwrap();
 
         let result = fm.read_memory_md("to_delete");
-        assert!(matches!(result, Err(AgentFileManagerError::FileNotFound(_))));
+        assert!(matches!(
+            result,
+            Err(AgentFileManagerError::FileNotFound(_))
+        ));
     }
 
     #[test]
@@ -393,7 +410,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let fm = AgentFileManager::with_working_dir(temp_dir.path()).unwrap();
 
-        fm.write_working_md("metadata_test", "some content").unwrap();
+        fm.write_working_md("metadata_test", "some content")
+            .unwrap();
         let files = fm.list_working_mds().unwrap();
 
         assert_eq!(files.len(), 1);

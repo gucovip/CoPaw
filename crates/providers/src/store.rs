@@ -4,6 +4,8 @@
 use crate::registry::{ModelInfo, ProviderDefinition, ProviderRegistry, BUILTIN_PROVIDER_IDS};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -155,9 +157,18 @@ impl ProvidersData {
 
     /// Check if a provider is configured.
     pub fn is_configured(&self, defn: &ProviderDefinition) -> bool {
-        // Local providers and Ollama are always considered configured
-        if defn.is_local || defn.id == "ollama" {
+        // Local providers are always considered configured
+        if defn.is_local {
             return true;
+        }
+
+        // Ollama is configured if a base_url exists in settings.
+        if defn.id == "ollama" {
+            return self
+                .providers
+                .get(&defn.id)
+                .map(|s| !s.base_url.is_empty())
+                .unwrap_or(false);
         }
 
         // Custom providers need base_url
@@ -165,16 +176,8 @@ impl ProvidersData {
             return !cpd.effective_base_url().is_empty();
         }
 
-        // Built-in providers
-        if let Some(settings) = self.providers.get(&defn.id) {
-            // Providers without default base URL need both
-            if defn.default_base_url.is_empty() {
-                return !settings.base_url.is_empty() && !settings.api_key.is_empty();
-            }
-            return !settings.api_key.is_empty();
-        }
-
-        false
+        // Built-in remote providers are considered configured when settings exist.
+        self.providers.contains_key(&defn.id)
     }
 }
 
@@ -188,6 +191,65 @@ pub struct ProviderStore {
 }
 
 impl ProviderStore {
+    fn expand_home(path: &str) -> PathBuf {
+        if let Some(home) = dirs::home_dir() {
+            if let Some(rest) = path.strip_prefix('~') {
+                return home.join(rest.trim_start_matches('/'));
+            }
+        }
+        PathBuf::from(path)
+    }
+
+    fn bootstrap_working_dir() -> PathBuf {
+        let raw = env::var("COPAW_WORKING_DIR").unwrap_or_else(|_| "~/.copaw".to_string());
+        Self::expand_home(&raw)
+    }
+
+    fn bootstrap_secret_dir() -> PathBuf {
+        if let Ok(secret) = env::var("COPAW_SECRET_DIR") {
+            return Self::expand_home(&secret);
+        }
+        let wd = Self::bootstrap_working_dir();
+        PathBuf::from(format!("{}.secret", wd.display()))
+    }
+
+    fn same_path(a: &Path, b: &Path) -> bool {
+        match (a.canonicalize(), b.canonicalize()) {
+            (Ok(aa), Ok(bb)) => aa == bb,
+            _ => false,
+        }
+    }
+
+    fn legacy_candidates() -> Vec<PathBuf> {
+        vec![
+            PathBuf::from("src/copaw/providers/providers.json"),
+            Self::bootstrap_working_dir().join("providers.json"),
+        ]
+    }
+
+    fn migrate_legacy_providers_json(&self) {
+        if self.path.is_file() {
+            return;
+        }
+        if self.path.exists() && !self.path.is_file() {
+            return;
+        }
+
+        for legacy in Self::legacy_candidates() {
+            if !legacy.is_file() || Self::same_path(&legacy, &self.path) {
+                continue;
+            }
+            if let Some(parent) = self.path.parent() {
+                if fs::create_dir_all(parent).is_err() {
+                    continue;
+                }
+            }
+            if fs::copy(&legacy, &self.path).is_ok() {
+                break;
+            }
+        }
+    }
+
     pub fn new(path: impl AsRef<Path>, registry: Arc<ProviderRegistry>) -> Self {
         Self {
             path: path.as_ref().to_path_buf(),
@@ -197,17 +259,23 @@ impl ProviderStore {
 
     /// Get the default providers.json path.
     pub fn default_path() -> PathBuf {
-        // Default to src/copaw/providers/providers.json
-        PathBuf::from("src/copaw/providers/providers.json")
+        Self::bootstrap_secret_dir().join("providers.json")
     }
 
     /// Load providers.json, creating/repairing as needed.
     pub fn load(&self) -> Result<ProvidersData, String> {
+        self.migrate_legacy_providers_json();
+        if self.path.exists() && !self.path.is_file() {
+            return Err(format!(
+                "providers.json path exists but is not a regular file: {}",
+                self.path.display()
+            ));
+        }
+
         let mut data = if self.path.exists() {
             let content = std::fs::read_to_string(&self.path)
                 .map_err(|e| format!("Failed to read providers.json: {e}"))?;
-            serde_json::from_str(&content)
-                .unwrap_or_else(|_| ProvidersData::default())
+            serde_json::from_str(&content).unwrap_or_else(|_| ProvidersData::default())
         } else {
             ProvidersData::default()
         };
@@ -229,6 +297,14 @@ impl ProviderStore {
 
     /// Save providers.json.
     pub fn save(&self, data: &ProvidersData) -> Result<(), String> {
+        self.migrate_legacy_providers_json();
+        if self.path.exists() && !self.path.is_file() {
+            return Err(format!(
+                "providers.json path exists but is not a regular file: {}",
+                self.path.display()
+            ));
+        }
+
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create directory: {e}"))?;
@@ -328,7 +404,9 @@ impl ProviderStore {
         }
 
         // Clear active_llm if api_key was cleared
-        if api_key.as_ref().map_or(false, |k| k.is_empty()) && data.active_llm.provider_id == provider_id {
+        if api_key.as_ref().map_or(false, |k| k.is_empty())
+            && data.active_llm.provider_id == provider_id
+        {
             data.active_llm = ModelSlotConfig::default();
         }
 
@@ -375,7 +453,8 @@ impl ProviderStore {
             chat_model: default_chat_model(),
         };
 
-        data.custom_providers.insert(provider_id.to_string(), cpd.clone());
+        data.custom_providers
+            .insert(provider_id.to_string(), cpd.clone());
 
         // Register in registry
         self.registry.register_custom(cpd.to_definition())?;
@@ -409,7 +488,9 @@ impl ProviderStore {
 
     /// Add a model to a provider.
     pub fn add_model(&self, provider_id: &str, model: ModelInfo) -> Result<ProvidersData, String> {
-        let defn = self.registry.get(provider_id)
+        let defn = self
+            .registry
+            .get(provider_id)
             .ok_or_else(|| format!("Provider '{provider_id}' not found."))?;
 
         let mut data = self.load()?;
@@ -420,23 +501,32 @@ impl ProviderStore {
 
         if BUILTIN_PROVIDER_IDS.contains(&provider_id) {
             let settings = data.providers.entry(provider_id.to_string()).or_default();
-            let all_ids: std::collections::HashSet<_> = defn.models
+            let all_ids: std::collections::HashSet<_> = defn
+                .models
                 .iter()
                 .map(|m| &m.id)
                 .chain(settings.extra_models.iter().map(|m| &m.id))
                 .collect();
 
             if all_ids.contains(&model.id) {
-                return Err(format!("Model '{}' already exists in provider '{provider_id}'.", model.id));
+                return Err(format!(
+                    "Model '{}' already exists in provider '{provider_id}'.",
+                    model.id
+                ));
             }
 
             settings.extra_models.push(model);
         } else {
-            let cpd = data.custom_providers.get_mut(provider_id)
+            let cpd = data
+                .custom_providers
+                .get_mut(provider_id)
                 .ok_or_else(|| format!("Custom provider '{provider_id}' not found."))?;
 
             if cpd.models.iter().any(|m| m.id == model.id) {
-                return Err(format!("Model '{}' already exists in provider '{provider_id}'.", model.id));
+                return Err(format!(
+                    "Model '{}' already exists in provider '{provider_id}'.",
+                    model.id
+                ));
             }
 
             cpd.models.push(model);
@@ -449,7 +539,9 @@ impl ProviderStore {
 
     /// Remove a model from a provider.
     pub fn remove_model(&self, provider_id: &str, model_id: &str) -> Result<ProvidersData, String> {
-        let defn = self.registry.get(provider_id)
+        let defn = self
+            .registry
+            .get(provider_id)
             .ok_or_else(|| format!("Provider '{provider_id}' not found."))?;
 
         let mut data = self.load()?;
@@ -463,24 +555,31 @@ impl ProviderStore {
                 return Err(format!("Model '{model_id}' is a built-in model of '{provider_id}' and cannot be removed."));
             }
 
-            let settings = data.providers.get_mut(provider_id)
-                .ok_or_else(|| format!("Model '{model_id}' not found in provider '{provider_id}'."))?;
+            let settings = data.providers.get_mut(provider_id).ok_or_else(|| {
+                format!("Model '{model_id}' not found in provider '{provider_id}'.")
+            })?;
 
             let original_len = settings.extra_models.len();
             settings.extra_models.retain(|m| m.id != model_id);
 
             if settings.extra_models.len() == original_len {
-                return Err(format!("Model '{model_id}' not found in provider '{provider_id}'."));
+                return Err(format!(
+                    "Model '{model_id}' not found in provider '{provider_id}'."
+                ));
             }
         } else {
-            let cpd = data.custom_providers.get_mut(provider_id)
+            let cpd = data
+                .custom_providers
+                .get_mut(provider_id)
                 .ok_or_else(|| format!("Custom provider '{provider_id}' not found."))?;
 
             let original_len = cpd.models.len();
             cpd.models.retain(|m| m.id != model_id);
 
             if cpd.models.len() == original_len {
-                return Err(format!("Model '{model_id}' not found in provider '{provider_id}'."));
+                return Err(format!(
+                    "Model '{model_id}' not found in provider '{provider_id}'."
+                ));
             }
 
             self.registry.register_custom(cpd.to_definition())?;
@@ -512,7 +611,6 @@ pub fn mask_api_key(api_key: &str, visible_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     fn create_test_store(temp_dir: &TempDir) -> ProviderStore {
@@ -540,10 +638,13 @@ mod tests {
         let mut data = ProvidersData::default();
         data.active_llm = ModelSlotConfig::new("openai", "gpt-4");
         // Configure openai with an API key so active_llm won't be cleared on load
-        data.providers.insert("openai".to_string(), ProviderSettings {
-            api_key: "sk-test-key".to_string(),
-            ..Default::default()
-        });
+        data.providers.insert(
+            "openai".to_string(),
+            ProviderSettings {
+                api_key: "sk-test-key".to_string(),
+                ..Default::default()
+            },
+        );
 
         store.save(&data).unwrap();
         let loaded = store.load().unwrap();
@@ -558,7 +659,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = create_test_store(&temp_dir);
 
-        let mut data = store.load().unwrap();
+        let data = store.load().unwrap();
         // Should have entries for all non-local built-in providers
         assert!(data.providers.contains_key("openai"));
         assert!(data.providers.contains_key("ollama"));
@@ -572,7 +673,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = create_test_store(&temp_dir);
 
-        let data = store.update_settings("openai", Some("sk-test".to_string()), None).unwrap();
+        let data = store
+            .update_settings("openai", Some("sk-test".to_string()), None)
+            .unwrap();
         assert_eq!(data.providers.get("openai").unwrap().api_key, "sk-test");
 
         let loaded = store.load().unwrap();
@@ -642,18 +745,33 @@ mod tests {
 
         // Add model
         let data = store.add_model("openai", model.clone()).unwrap();
-        assert!(data.providers.get("openai").unwrap().extra_models.iter().any(|m| m.id == "custom-model"));
+        assert!(data
+            .providers
+            .get("openai")
+            .unwrap()
+            .extra_models
+            .iter()
+            .any(|m| m.id == "custom-model"));
 
         // Remove model
         let data = store.remove_model("openai", "custom-model").unwrap();
-        assert!(!data.providers.get("openai").unwrap().extra_models.iter().any(|m| m.id == "custom-model"));
+        assert!(!data
+            .providers
+            .get("openai")
+            .unwrap()
+            .extra_models
+            .iter()
+            .any(|m| m.id == "custom-model"));
     }
 
     #[test]
     fn test_mask_api_key() {
         assert_eq!(mask_api_key("", 4), "");
         assert_eq!(mask_api_key("ab", 4), "**");
-        assert_eq!(mask_api_key("sk-1234567890abcdef", 4), "sk-************cdef");
+        assert_eq!(
+            mask_api_key("sk-1234567890abcdef", 4),
+            "sk-************cdef"
+        );
         assert_eq!(mask_api_key("sk-test-key", 3), "sk-*****key");
     }
 
@@ -667,11 +785,31 @@ mod tests {
         };
         assert!(data.is_configured(&defn));
 
-        let defn = ProviderDefinition {
+        let remote_defn = ProviderDefinition {
             id: "openai".to_string(),
             default_base_url: "https://api.openai.com/v1".to_string(),
             ..Default::default()
         };
-        assert!(!data.is_configured(&defn));
+        assert!(!data.is_configured(&remote_defn));
+
+        // Built-in remote providers are configured once settings exist.
+        let mut data = ProvidersData::default();
+        data.providers.insert(
+            "openai".to_string(),
+            ProviderSettings {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: String::new(),
+                extra_models: vec![],
+                chat_model: String::new(),
+            },
+        );
+        assert!(data.is_configured(&remote_defn));
+
+        // Ollama requires base_url in settings.
+        let ollama_defn = ProviderDefinition {
+            id: "ollama".to_string(),
+            ..Default::default()
+        };
+        assert!(!ProvidersData::default().is_configured(&ollama_defn));
     }
 }

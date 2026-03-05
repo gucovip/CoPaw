@@ -104,13 +104,10 @@ where
         .ok_or_else(|| EnvsError::BadRequest("Missing 'value' field".to_string()))?;
 
     let store = state.envs_state().store();
-    let envs = store
-        .set(key, value)
-        .await
-        .map_err(|e| match e {
-            EnvError::InvalidKey(_) => EnvsError::BadRequest(e.to_string()),
-            _ => EnvsError::Internal(e.to_string()),
-        })?;
+    let envs = store.set(key, value).await.map_err(|e| match e {
+        EnvError::InvalidKey(_) => EnvsError::BadRequest(e.to_string()),
+        _ => EnvsError::Internal(e.to_string()),
+    })?;
 
     let env_vars: Vec<EnvVar> = envs
         .into_iter()
@@ -135,13 +132,10 @@ where
         .map_err(|e| EnvsError::BadRequest(format!("Invalid JSON object: {}", e)))?;
 
     let store = state.envs_state().store();
-    let envs = store
-        .batch_save(envs_map)
-        .await
-        .map_err(|e| match e {
-            EnvError::InvalidKey(_) => EnvsError::BadRequest(e.to_string()),
-            _ => EnvsError::Internal(e.to_string()),
-        })?;
+    let envs = store.batch_save(envs_map).await.map_err(|e| match e {
+        EnvError::InvalidKey(_) => EnvsError::BadRequest(e.to_string()),
+        _ => EnvsError::Internal(e.to_string()),
+    })?;
 
     let env_vars: Vec<EnvVar> = envs
         .into_iter()
@@ -163,13 +157,10 @@ where
     S: HasEnvsState + Clone + Send + Sync + 'static,
 {
     let store = state.envs_state().store();
-    let envs = store
-        .delete(&key)
-        .await
-        .map_err(|e| match e {
-            EnvError::NotFound(_) => EnvsError::NotFound(format!("Env var '{}' not found", key)),
-            _ => EnvsError::Internal(e.to_string()),
-        })?;
+    let envs = store.delete(&key).await.map_err(|e| match e {
+        EnvError::NotFound(_) => EnvsError::NotFound(format!("Env var '{}' not found", key)),
+        _ => EnvsError::Internal(e.to_string()),
+    })?;
 
     let env_vars: Vec<EnvVar> = envs
         .into_iter()
@@ -190,7 +181,12 @@ where
     use axum::routing::*;
 
     axum::Router::new()
-        .route("/", get(list_envs::<S>).post(set_env_var::<S>).put(batch_save_envs::<S>))
+        .route(
+            "/",
+            get(list_envs::<S>)
+                .post(set_env_var::<S>)
+                .put(batch_save_envs::<S>),
+        )
         .route("/:key", axum::routing::delete(delete_env::<S>))
 }
 

@@ -112,6 +112,8 @@ pub async fn list_installed_skills() -> Result<Json<Vec<SkillSpec>>, SkillsError
 
 /// GET /api/skills/hub - Search Skills Hub (placeholder)
 pub async fn search_hub(Query(_query): Query<HubSearchQuery>) -> Json<Vec<HubSkillSpec>> {
+    let _query_text = _query.q.trim();
+    let _limit = _query.limit.max(1);
     // TODO: Implement actual hub search in Phase 5.2
     // For now, return empty results
     Json(vec![])
@@ -121,6 +123,10 @@ pub async fn search_hub(Query(_query): Query<HubSearchQuery>) -> Json<Vec<HubSki
 pub async fn install_from_hub(
     Json(_req): Json<HubInstallRequest>,
 ) -> Result<Json<Value>, SkillsError> {
+    let _bundle_url = _req.bundle_url.trim();
+    let _version = _req.version.trim();
+    let _enable = _req.enable;
+    let _overwrite = _req.overwrite;
     // TODO: Implement actual hub installation in Phase 5.2
     Ok(Json(serde_json::json!({
         "installed": false,
@@ -163,18 +169,13 @@ pub async fn disable_skill(Path(skill_name): Path<String>) -> Result<Json<Value>
 
 /// POST /api/skills - Create a custom skill
 pub async fn create_skill(Json(req): Json<CreateSkillRequest>) -> Result<Json<Value>, SkillsError> {
-    SkillService::create_skill(
-        &req.name,
-        &req.content,
-        req.references,
-        req.scripts,
-    )
-    .await
-    .map_err(|e| match e {
-        SkillError::AlreadyExists(_) => SkillsError::BadRequest(e.to_string()),
-        SkillError::InvalidContent(_) => SkillsError::BadRequest(e.to_string()),
-        _ => SkillsError::Internal(e.to_string()),
-    })?;
+    SkillService::create_skill(&req.name, &req.content, req.references, req.scripts)
+        .await
+        .map_err(|e| match e {
+            SkillError::AlreadyExists(_) => SkillsError::BadRequest(e.to_string()),
+            SkillError::InvalidContent(_) => SkillsError::BadRequest(e.to_string()),
+            _ => SkillsError::Internal(e.to_string()),
+        })?;
 
     Ok(Json(serde_json::json!({
         "created": true,
@@ -225,10 +226,12 @@ pub async fn load_skill_file(
     let skill_source = match source.as_str() {
         "builtin" => SkillSource::Builtin,
         "customized" => SkillSource::Customized,
-        _ => return Err(SkillsError::BadRequest(format!(
-            "Invalid source '{}', must be 'builtin' or 'customized'",
-            source
-        ))),
+        _ => {
+            return Err(SkillsError::BadRequest(format!(
+                "Invalid source '{}', must be 'builtin' or 'customized'",
+                source
+            )))
+        }
     };
 
     let content = SkillService::load_skill_file(&skill_name, &file_path, skill_source)
@@ -293,9 +296,15 @@ where
         .route("/batch-disable", post(batch_disable_skills))
         .route("/:skill_name/enable", post(enable_skill))
         .route("/:skill_name/disable", post(disable_skill))
-        .route("/:skill_name/config", get(get_skill_config).put(update_skill_config))
+        .route(
+            "/:skill_name/config",
+            get(get_skill_config).put(update_skill_config),
+        )
         .route("/:skill_name", delete(delete_skill))
-        .route("/:skill_name/files/:source/*file_path", get(load_skill_file))
+        .route(
+            "/:skill_name/files/:source/*file_path",
+            get(load_skill_file),
+        )
 }
 
 #[cfg(test)]

@@ -92,57 +92,179 @@ impl ProviderDefinition {
 // Built-in provider models
 fn modelscope_models() -> Vec<ModelInfo> {
     vec![
-        ModelInfo { id: "Qwen/Qwen3-235B-A22B-Instruct-2507".to_string(), name: "Qwen3-235B-A22B-Instruct-2507".to_string() },
-        ModelInfo { id: "deepseek-ai/DeepSeek-V3.2".to_string(), name: "DeepSeek-V3.2".to_string() },
+        ModelInfo {
+            id: "Qwen/Qwen3-235B-A22B-Instruct-2507".to_string(),
+            name: "Qwen3-235B-A22B-Instruct-2507".to_string(),
+        },
+        ModelInfo {
+            id: "deepseek-ai/DeepSeek-V3.2".to_string(),
+            name: "DeepSeek-V3.2".to_string(),
+        },
     ]
 }
 
 fn dashscope_models() -> Vec<ModelInfo> {
     vec![
-        ModelInfo { id: "qwen3-max".to_string(), name: "Qwen3 Max".to_string() },
-        ModelInfo { id: "qwen3-235b-a22b-thinking-2507".to_string(), name: "Qwen3 235B A22B Thinking".to_string() },
-        ModelInfo { id: "deepseek-v3.2".to_string(), name: "DeepSeek-V3.2".to_string() },
+        ModelInfo {
+            id: "qwen3-max".to_string(),
+            name: "Qwen3 Max".to_string(),
+        },
+        ModelInfo {
+            id: "qwen3-235b-a22b-thinking-2507".to_string(),
+            name: "Qwen3 235B A22B Thinking".to_string(),
+        },
+        ModelInfo {
+            id: "deepseek-v3.2".to_string(),
+            name: "DeepSeek-V3.2".to_string(),
+        },
     ]
 }
 
 fn aliyun_codingplan_models() -> Vec<ModelInfo> {
     vec![
-        ModelInfo { id: "qwen3.5-plus".to_string(), name: "Qwen3.5 Plus".to_string() },
-        ModelInfo { id: "glm-5".to_string(), name: "GLM-5".to_string() },
-        ModelInfo { id: "glm-4.7".to_string(), name: "GLM-4.7".to_string() },
-        ModelInfo { id: "MiniMax-M2.5".to_string(), name: "MiniMax M2.5".to_string() },
-        ModelInfo { id: "kimi-k2.5".to_string(), name: "Kimi K2.5".to_string() },
-        ModelInfo { id: "qwen3-max-2026-01-23".to_string(), name: "Qwen3 Max 2026-01-23".to_string() },
-        ModelInfo { id: "qwen3-coder-next".to_string(), name: "Qwen3 Coder Next".to_string() },
-        ModelInfo { id: "qwen3-coder-plus".to_string(), name: "Qwen3 Coder Plus".to_string() },
+        ModelInfo {
+            id: "qwen3.5-plus".to_string(),
+            name: "Qwen3.5 Plus".to_string(),
+        },
+        ModelInfo {
+            id: "glm-5".to_string(),
+            name: "GLM-5".to_string(),
+        },
+        ModelInfo {
+            id: "glm-4.7".to_string(),
+            name: "GLM-4.7".to_string(),
+        },
+        ModelInfo {
+            id: "MiniMax-M2.5".to_string(),
+            name: "MiniMax M2.5".to_string(),
+        },
+        ModelInfo {
+            id: "kimi-k2.5".to_string(),
+            name: "Kimi K2.5".to_string(),
+        },
+        ModelInfo {
+            id: "qwen3-max-2026-01-23".to_string(),
+            name: "Qwen3 Max 2026-01-23".to_string(),
+        },
+        ModelInfo {
+            id: "qwen3-coder-next".to_string(),
+            name: "Qwen3 Coder Next".to_string(),
+        },
+        ModelInfo {
+            id: "qwen3-coder-plus".to_string(),
+            name: "Qwen3 Coder Plus".to_string(),
+        },
     ]
 }
 
 fn openai_models() -> Vec<ModelInfo> {
     vec![
-        ModelInfo { id: "gpt-5-chat".to_string(), name: "GPT-5 Chat".to_string() },
-        ModelInfo { id: "gpt-5-mini".to_string(), name: "GPT-5 Mini".to_string() },
-        ModelInfo { id: "gpt-5-nano".to_string(), name: "GPT-5 Nano".to_string() },
-        ModelInfo { id: "gpt-4.1".to_string(), name: "GPT-4.1".to_string() },
-        ModelInfo { id: "gpt-4.1-mini".to_string(), name: "GPT-4.1 Mini".to_string() },
-        ModelInfo { id: "gpt-4.1-nano".to_string(), name: "GPT-4.1 Nano".to_string() },
-        ModelInfo { id: "o3".to_string(), name: "o3".to_string() },
-        ModelInfo { id: "o4-mini".to_string(), name: "o4-mini".to_string() },
-        ModelInfo { id: "gpt-4o".to_string(), name: "GPT-4o".to_string() },
-        ModelInfo { id: "gpt-4o-mini".to_string(), name: "GPT-4o Mini".to_string() },
+        ModelInfo {
+            id: "gpt-5.2".to_string(),
+            name: "GPT-5.2".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-5".to_string(),
+            name: "GPT-5".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-5-mini".to_string(),
+            name: "GPT-5 Mini".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-5-nano".to_string(),
+            name: "GPT-5 Nano".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4.1".to_string(),
+            name: "GPT-4.1".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4.1-mini".to_string(),
+            name: "GPT-4.1 Mini".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4.1-nano".to_string(),
+            name: "GPT-4.1 Nano".to_string(),
+        },
+        ModelInfo {
+            id: "o3".to_string(),
+            name: "o3".to_string(),
+        },
+        ModelInfo {
+            id: "o4-mini".to_string(),
+            name: "o4-mini".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4o".to_string(),
+            name: "GPT-4o".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4o-mini".to_string(),
+            name: "GPT-4o Mini".to_string(),
+        },
     ]
 }
 
 fn azure_openai_models() -> Vec<ModelInfo> {
     vec![
-        ModelInfo { id: "gpt-5-chat".to_string(), name: "GPT-5 Chat".to_string() },
-        ModelInfo { id: "gpt-5-mini".to_string(), name: "GPT-5 Mini".to_string() },
-        ModelInfo { id: "gpt-5-nano".to_string(), name: "GPT-5 Nano".to_string() },
-        ModelInfo { id: "gpt-4.1".to_string(), name: "GPT-4.1".to_string() },
-        ModelInfo { id: "gpt-4.1-mini".to_string(), name: "GPT-4.1 Mini".to_string() },
-        ModelInfo { id: "gpt-4.1-nano".to_string(), name: "GPT-4.1 Nano".to_string() },
-        ModelInfo { id: "gpt-4o".to_string(), name: "GPT-4o".to_string() },
-        ModelInfo { id: "gpt-4o-mini".to_string(), name: "GPT-4o Mini".to_string() },
+        ModelInfo {
+            id: "gpt-5.2".to_string(),
+            name: "GPT-5.2".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-5".to_string(),
+            name: "GPT-5".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-5-mini".to_string(),
+            name: "GPT-5 Mini".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-5-nano".to_string(),
+            name: "GPT-5 Nano".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4.1".to_string(),
+            name: "GPT-4.1".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4.1-mini".to_string(),
+            name: "GPT-4.1 Mini".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4.1-nano".to_string(),
+            name: "GPT-4.1 Nano".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4o".to_string(),
+            name: "GPT-4o".to_string(),
+        },
+        ModelInfo {
+            id: "gpt-4o-mini".to_string(),
+            name: "GPT-4o Mini".to_string(),
+        },
+    ]
+}
+
+fn anthropic_models() -> Vec<ModelInfo> {
+    vec![
+        ModelInfo {
+            id: "claude-opus-4-1-20250805".to_string(),
+            name: "Claude Opus 4.1".to_string(),
+        },
+        ModelInfo {
+            id: "claude-sonnet-4-20250514".to_string(),
+            name: "Claude Sonnet 4".to_string(),
+        },
+        ModelInfo {
+            id: "claude-3-7-sonnet-latest".to_string(),
+            name: "Claude 3.7 Sonnet".to_string(),
+        },
+        ModelInfo {
+            id: "claude-3-5-haiku-latest".to_string(),
+            name: "Claude 3.5 Haiku".to_string(),
+        },
     ]
 }
 
@@ -220,6 +342,16 @@ pub fn builtin_providers() -> Vec<ProviderDefinition> {
             chat_model: default_chat_model(),
         },
         ProviderDefinition {
+            id: "anthropic".to_string(),
+            name: "Anthropic".to_string(),
+            default_base_url: "https://api.anthropic.com/v1".to_string(),
+            api_key_prefix: "sk-ant-".to_string(),
+            models: anthropic_models(),
+            is_custom: false,
+            is_local: false,
+            chat_model: default_chat_model(),
+        },
+        ProviderDefinition {
             id: "ollama".to_string(),
             name: "Ollama".to_string(),
             default_base_url: "http://localhost:11434/v1".to_string(),
@@ -239,6 +371,7 @@ pub const BUILTIN_PROVIDER_IDS: &[&str] = &[
     "aliyun-codingplan",
     "openai",
     "azure-openai",
+    "anthropic",
     "ollama",
     "llamacpp",
     "mlx",
@@ -374,8 +507,9 @@ mod tests {
     #[test]
     fn test_builtin_providers() {
         let providers = builtin_providers();
-        assert_eq!(providers.len(), 8);
+        assert_eq!(providers.len(), 9);
         assert!(providers.iter().any(|p| p.id == "openai"));
+        assert!(providers.iter().any(|p| p.id == "anthropic"));
         assert!(providers.iter().any(|p| p.id == "ollama"));
     }
 
@@ -394,13 +528,14 @@ mod tests {
     fn test_registry_list() {
         let registry = ProviderRegistry::new();
         let providers = registry.list();
-        assert_eq!(providers.len(), 8);
+        assert_eq!(providers.len(), 9);
     }
 
     #[test]
     fn test_is_builtin() {
         let registry = ProviderRegistry::new();
         assert!(registry.is_builtin("openai"));
+        assert!(registry.is_builtin("anthropic"));
         assert!(registry.is_builtin("ollama"));
         assert!(!registry.is_builtin("custom"));
     }
@@ -413,7 +548,9 @@ mod tests {
         assert!(registry.validate_custom_id("openai").is_some()); // built-in
         assert!(registry.validate_custom_id("123invalid").is_some()); // starts with digit
         assert!(registry.validate_custom_id("Invalid").is_some()); // uppercase
-        assert!(registry.validate_custom_id("a".repeat(65).as_str()).is_some()); // too long
+        assert!(registry
+            .validate_custom_id("a".repeat(65).as_str())
+            .is_some()); // too long
     }
 
     #[test]

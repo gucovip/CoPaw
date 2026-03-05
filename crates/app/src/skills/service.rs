@@ -1,19 +1,21 @@
 // -*- coding: utf-8 -*-
 // Skills service for managing skills across builtin, customized, and active directories
 
-use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tokio::fs;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 
 /// Working directory path resolver
 fn get_working_dir() -> PathBuf {
     std::env::var("COPAW_WORKING_DIR")
         .unwrap_or_else(|_| "~/.copaw".to_string())
-        .replace('~', &std::env::var("HOME").unwrap_or_else(|_| ".".to_string()))
+        .replace(
+            '~',
+            &std::env::var("HOME").unwrap_or_else(|_| ".".to_string()),
+        )
         .into()
 }
 
@@ -125,7 +127,9 @@ async fn build_directory_tree(directory: &Path) -> HashMap<String, serde_json::V
 }
 
 /// Non-recursive helper for building directory tree
-fn build_directory_tree_recursive(directory: &Path) -> futures::future::BoxFuture<'static, HashMap<String, serde_json::Value>> {
+fn build_directory_tree_recursive(
+    directory: &Path,
+) -> futures::future::BoxFuture<'static, HashMap<String, serde_json::Value>> {
     let directory = directory.to_path_buf();
     Box::pin(async move {
         let mut tree = HashMap::new();
@@ -170,7 +174,8 @@ async fn collect_skills_from_dir(directory: &Path) -> HashMap<String, PathBuf> {
     while let Some(entry) = entries.next_entry().await.unwrap_or(None) {
         let path = entry.path();
         if path.is_dir() && path.join("SKILL.md").exists() {
-            let name = path.file_name()
+            let name = path
+                .file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
@@ -195,16 +200,15 @@ impl SkillService {
         }
 
         // Collect from builtin skills
-        skills.extend(Self::read_skills_from_dir(
-            &get_builtin_skills_dir(),
-            SkillSource::Builtin,
-        ).await?);
+        skills.extend(
+            Self::read_skills_from_dir(&get_builtin_skills_dir(), SkillSource::Builtin).await?,
+        );
 
         // Collect from customized skills
-        skills.extend(Self::read_skills_from_dir(
-            &get_customized_skills_dir(),
-            SkillSource::Customized,
-        ).await?);
+        skills.extend(
+            Self::read_skills_from_dir(&get_customized_skills_dir(), SkillSource::Customized)
+                .await?,
+        );
 
         Ok(skills)
     }
@@ -224,7 +228,7 @@ impl SkillService {
         // Validate SKILL.md content (should have YAML front matter)
         if !content.contains("---") {
             return Err(SkillError::InvalidContent(
-                "SKILL.md must contain YAML front matter".to_string()
+                "SKILL.md must contain YAML front matter".to_string(),
             ));
         }
 
@@ -308,7 +312,7 @@ impl SkillService {
         // Validate source
         if !matches!(source, SkillSource::Builtin | SkillSource::Customized) {
             return Err(SkillError::InvalidContent(
-                "Source must be 'builtin' or 'customized'".to_string()
+                "Source must be 'builtin' or 'customized'".to_string(),
             ));
         }
 
@@ -318,14 +322,14 @@ impl SkillService {
         // Validate file_path starts with references/ or scripts/
         if !normalized.starts_with("references/") && !normalized.starts_with("scripts/") {
             return Err(SkillError::InvalidContent(
-                "file_path must start with 'references/' or 'scripts/'".to_string()
+                "file_path must start with 'references/' or 'scripts/'".to_string(),
             ));
         }
 
         // Prevent path traversal
         if normalized.contains("..") || normalized.starts_with('/') {
             return Err(SkillError::InvalidContent(
-                "Path traversal not allowed".to_string()
+                "Path traversal not allowed".to_string(),
             ));
         }
 
@@ -335,17 +339,27 @@ impl SkillService {
 
         // Check if skill exists
         if !skill_dir.exists() {
-            return Err(SkillError::NotFound(format!("'{}' in {}", skill_name, serde_json::to_string(&source).unwrap_or_default())));
+            return Err(SkillError::NotFound(format!(
+                "'{}' in {}",
+                skill_name,
+                serde_json::to_string(&source).unwrap_or_default()
+            )));
         }
 
         // Check if file exists
         if !full_path.exists() {
-            return Err(SkillError::NotFound(format!("'{}' in skill '{}'", file_path, skill_name)));
+            return Err(SkillError::NotFound(format!(
+                "'{}' in skill '{}'",
+                file_path, skill_name
+            )));
         }
 
         // Check if it's a file
         if !full_path.is_file() {
-            return Err(SkillError::InvalidContent(format!("'{}' is not a file", file_path)));
+            return Err(SkillError::InvalidContent(format!(
+                "'{}' is not a file",
+                file_path
+            )));
         }
 
         let content = fs::read_to_string(&full_path).await?;
@@ -381,7 +395,8 @@ impl SkillService {
                 continue;
             }
 
-            let name = skill_dir.file_name()
+            let name = skill_dir
+                .file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
@@ -439,15 +454,18 @@ impl SkillService {
                 }
                 serde_json::Value::Object(_) => {
                     // It's a directory - recursively create
-                    if let Ok(subtree) = serde_json::from_value::<HashMap<String, serde_json::Value>>(value.clone()) {
+                    if let Ok(subtree) =
+                        serde_json::from_value::<HashMap<String, serde_json::Value>>(value.clone())
+                    {
                         std::fs::create_dir_all(&item_path)?;
                         Self::create_files_from_tree_sync(&item_path, &subtree)?;
                     }
                 }
                 _ => {
-                    return Err(SkillError::InvalidContent(
-                        format!("Invalid tree value for '{}'", name)
-                    ));
+                    return Err(SkillError::InvalidContent(format!(
+                        "Invalid tree value for '{}'",
+                        name
+                    )));
                 }
             }
         }
@@ -474,7 +492,8 @@ impl SkillService {
 
         // Filter by skill_names if specified
         if let Some(names) = skill_names {
-            skills_to_sync = skills_to_sync.into_iter()
+            skills_to_sync = skills_to_sync
+                .into_iter()
                 .filter(|(name, _)| names.contains(name))
                 .collect();
         }
@@ -491,7 +510,10 @@ impl SkillService {
 
             // Check if skill already exists
             if target_dir.exists() && !force {
-                debug!("Skill '{}' already exists in active_skills, skipping", skill_name);
+                debug!(
+                    "Skill '{}' already exists in active_skills, skipping",
+                    skill_name
+                );
                 skipped_count += 1;
                 continue;
             }
@@ -553,7 +575,10 @@ impl SkillService {
             }
 
             Self::copy_dir_recursive(&skill_dir, &target_dir).await?;
-            debug!("Synced skill '{}' from active_skills to customized_skills", skill_name);
+            debug!(
+                "Synced skill '{}' from active_skills to customized_skills",
+                skill_name
+            );
             synced_count += 1;
         }
 
@@ -566,7 +591,10 @@ impl SkillService {
     }
 
     /// Helper function for recursive directory copying (boxed for async recursion)
-    fn copy_dir_recursive_helper<'a>(src: &'a Path, dst: &'a Path) -> futures::future::BoxFuture<'a, Result<(), SkillError>> {
+    fn copy_dir_recursive_helper<'a>(
+        src: &'a Path,
+        dst: &'a Path,
+    ) -> futures::future::BoxFuture<'a, Result<(), SkillError>> {
         let src = src.to_path_buf();
         let dst = dst.to_path_buf();
         Box::pin(async move {
@@ -677,7 +705,9 @@ mod tests {
         // Create test structure
         fs::create_dir_all(dir.join("subdir")).await.unwrap();
         fs::write(dir.join("file.txt"), "content").await.unwrap();
-        fs::write(dir.join("subdir/nested.py"), "print('hello')").await.unwrap();
+        fs::write(dir.join("subdir/nested.py"), "print('hello')")
+            .await
+            .unwrap();
 
         let tree = build_directory_tree(dir).await;
 

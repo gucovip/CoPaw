@@ -5,7 +5,10 @@ pub fn expand_home(path: &str) -> PathBuf {
     if let Some(home) = dirs::home_dir() {
         if path.starts_with('~') {
             // Skip ~ and any following /
-            let rest = path.strip_prefix('~').unwrap_or(path).trim_start_matches('/');
+            let rest = path
+                .strip_prefix('~')
+                .unwrap_or(path)
+                .trim_start_matches('/');
             return home.join(rest);
         }
     }

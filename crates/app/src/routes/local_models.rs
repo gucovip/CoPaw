@@ -1,13 +1,11 @@
 // -*- coding: utf-8 -*-
 // API routes for local model management.
 
-use super::schemas::{
-    ActiveModelsInfo, ModelSlotConfigPublic, ProviderInfo, TestConnectionResponse,
-};
 use super::download::{DownloadManager, DownloadResult, DownloadStatus, DownloadTask};
+use super::schemas::ProviderInfo;
 use axum::{
     extract::{Path as AxumPath, State},
-    http::{header, HeaderMap, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Json, Json as JsonExtractor, Response},
 };
 use copaw_providers::{ProviderRegistry, ProviderStore};
@@ -22,6 +20,7 @@ pub const LOCAL_MODELS_DIR: &str = "models";
 #[derive(Clone)]
 pub struct LocalModelsState {
     pub registry: Arc<ProviderRegistry>,
+    #[allow(dead_code)]
     pub store: Arc<ProviderStore>,
     pub download_manager: Arc<DownloadManager>,
     pub models_dir: PathBuf,
@@ -44,6 +43,7 @@ impl LocalModelsState {
     }
 
     /// Get the download manager.
+    #[allow(dead_code)]
     pub fn download_manager(&self) -> &DownloadManager {
         &self.download_manager
     }
@@ -132,6 +132,7 @@ pub enum LocalModelsError {
     NotFound(String),
     BadRequest(String),
     Internal(String),
+    #[allow(dead_code)]
     NotImplemented(String),
 }
 
@@ -170,20 +171,18 @@ pub async fn list_local_model_providers(
     let local_providers: Vec<ProviderInfo> = providers
         .iter()
         .filter(|p| p.is_local)
-        .map(|p| {
-            ProviderInfo {
-                id: p.id.clone(),
-                name: p.name.clone(),
-                api_key_prefix: String::new(),
-                models: p.models.clone(),
-                extra_models: vec![],
-                is_custom: false,
-                is_local: true,
-                needs_base_url: false,
-                has_api_key: true,
-                current_api_key: String::new(),
-                current_base_url: String::new(),
-            }
+        .map(|p| ProviderInfo {
+            id: p.id.clone(),
+            name: p.name.clone(),
+            api_key_prefix: String::new(),
+            models: p.models.clone(),
+            extra_models: vec![],
+            is_custom: false,
+            is_local: true,
+            needs_base_url: false,
+            has_api_key: false,
+            current_api_key: String::new(),
+            current_base_url: String::new(),
         })
         .collect();
 
@@ -263,12 +262,20 @@ async fn download_local_model_impl(
     }
 
     // Clear completed tasks for this backend
-    state.download_manager.clear_completed(Some(&req.backend)).await;
+    state
+        .download_manager
+        .clear_completed(Some(&req.backend))
+        .await;
 
     // Create download task
     let task = state
         .download_manager
-        .create_task(req.repo_id.clone(), req.filename.clone(), req.backend.clone(), req.source.clone())
+        .create_task(
+            req.repo_id.clone(),
+            req.filename.clone(),
+            req.backend.clone(),
+            req.source.clone(),
+        )
         .await;
 
     // Start background download
@@ -282,7 +289,9 @@ async fn download_local_model_impl(
 
     tokio::spawn(async move {
         // Update status to downloading
-        let _ = manager.update_status(&task_id, DownloadStatus::Downloading).await;
+        let _ = manager
+            .update_status(&task_id, DownloadStatus::Downloading)
+            .await;
 
         // For now, simulate download and mark as completed with a mock result
         // TODO: Implement actual download logic using huggingface_hub or modelscope
@@ -305,7 +314,9 @@ async fn download_local_model_impl(
                 repo_id.clone()
             },
             repo_id: repo_id.clone(),
-            filename: filename.clone().unwrap_or_else(|| "(full repo)".to_string()),
+            filename: filename
+                .clone()
+                .unwrap_or_else(|| "(full repo)".to_string()),
             backend: backend.clone(),
             source: source.clone(),
             file_size: 0, // Will be filled by actual download
@@ -371,10 +382,10 @@ pub async fn delete_local_model(
 
     // Find and remove the model from download tasks
     let mut tasks = state.download_manager.tasks_mut().await;
-    let task_id_to_remove = tasks.iter().find(|(_, t)| {
-        t.result.as_ref().map(|r| &r.id) == Some(&model_id)
-            && t.backend == provider
-    }).map(|(task_id, _)| task_id.clone());
+    let task_id_to_remove = tasks
+        .iter()
+        .find(|(_, t)| t.result.as_ref().map(|r| &r.id) == Some(&model_id) && t.backend == provider)
+        .map(|(task_id, _)| task_id.clone());
 
     if let Some(task_id) = task_id_to_remove {
         // Get the task to delete the file
@@ -395,7 +406,10 @@ pub async fn delete_local_model(
 
         tasks.remove(&task_id);
     } else {
-        return Err(LocalModelsError::NotFound(format!("Model '{}' not found", model_id)));
+        return Err(LocalModelsError::NotFound(format!(
+            "Model '{}' not found",
+            model_id
+        )));
     }
 
     Ok(Json(serde_json::json!({
@@ -409,8 +423,10 @@ pub async fn get_download_status(
     State(state): State<LocalModelsState>,
 ) -> Json<Vec<LocalModelDownloadTaskResponse>> {
     let tasks = state.download_manager.get_tasks(None).await;
-    let responses: Vec<LocalModelDownloadTaskResponse> =
-        tasks.into_iter().map(LocalModelDownloadTaskResponse::from).collect();
+    let responses: Vec<LocalModelDownloadTaskResponse> = tasks
+        .into_iter()
+        .map(LocalModelDownloadTaskResponse::from)
+        .collect();
     Json(responses)
 }
 
@@ -477,10 +493,12 @@ pub async fn delete_model(
     // Find the model across all providers
     for provider in providers {
         let mut tasks = state.download_manager.tasks_mut().await;
-        let task_id_to_remove = tasks.iter().find(|(_, t)| {
-            t.result.as_ref().map(|r| &r.id) == Some(&model_id)
-                && t.backend == provider
-        }).map(|(task_id, _)| task_id.clone());
+        let task_id_to_remove = tasks
+            .iter()
+            .find(|(_, t)| {
+                t.result.as_ref().map(|r| &r.id) == Some(&model_id) && t.backend == provider
+            })
+            .map(|(task_id, _)| task_id.clone());
 
         if let Some(task_id) = task_id_to_remove {
             // Get task to delete file
@@ -505,7 +523,10 @@ pub async fn delete_model(
         }
     }
 
-    Err(LocalModelsError::NotFound(format!("Model '{}' not found", model_id)))
+    Err(LocalModelsError::NotFound(format!(
+        "Model '{}' not found",
+        model_id
+    )))
 }
 
 /// POST /api/local-models/cancel-download/{task_id} - Cancel download task
@@ -537,10 +558,19 @@ pub fn create_local_models_router() -> axum::Router<LocalModelsState> {
         .route("/download", post(download_model))
         .route("/*model_id", delete(delete_model))
         .route("/providers", get(list_local_model_providers))
-        .route("/providers/:provider/models", get(list_provider_local_models))
+        .route(
+            "/providers/:provider/models",
+            get(list_provider_local_models),
+        )
         .route("/providers/:provider/download", post(download_local_model))
-        .route("/providers/:provider/models/:model/info", get(get_local_model_info))
-        .route("/providers/:provider/models/:model", delete(delete_local_model))
+        .route(
+            "/providers/:provider/models/:model/info",
+            get(get_local_model_info),
+        )
+        .route(
+            "/providers/:provider/models/:model",
+            delete(delete_local_model),
+        )
         .route("/download-status", get(get_download_status))
         .route("/cancel-download/:task_id", post(cancel_download))
 }
@@ -598,7 +628,9 @@ mod tests {
         assert!(result.is_ok());
         let providers = result.unwrap().0;
         // Should have llamacpp provider
-        assert!(providers.iter().any(|p| p.id == "llamacpp" || p.id == "mlx"));
+        assert!(providers
+            .iter()
+            .any(|p| p.id == "llamacpp" || p.id == "mlx"));
     }
 
     #[tokio::test]

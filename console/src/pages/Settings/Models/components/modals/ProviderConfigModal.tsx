@@ -34,7 +34,10 @@ export function ProviderConfigModal({
   const [testing, setTesting] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [form] = Form.useForm<ProviderConfigRequest>();
-  const canEditBaseUrl = provider.needs_base_url || provider.id === "ollama";
+  const canEditBaseUrl =
+    provider.needs_base_url ||
+    provider.id === "ollama" ||
+    provider.id === "anthropic";
 
   const apiKeyExtra = useMemo(() => {
     if (provider.current_api_key) {
@@ -229,6 +232,8 @@ export function ProviderConfigModal({
             canEditBaseUrl
               ? provider.id === "azure-openai"
                 ? t("models.azureEndpointHint")
+                : provider.id === "anthropic"
+                ? "Anthropic endpoint (supports proxy), e.g. https://api.anthropic.com/v1"
                 : t("models.openAIEndpoint")
               : undefined
           }
@@ -238,6 +243,8 @@ export function ProviderConfigModal({
               canEditBaseUrl
                 ? provider.id === "azure-openai"
                   ? "https://<resource>.openai.azure.com/openai/v1"
+                  : provider.id === "anthropic"
+                  ? "https://api.anthropic.com/v1"
                   : "http://localhost:11434/v1"
                 : ""
             }

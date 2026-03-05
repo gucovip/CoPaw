@@ -2,20 +2,19 @@
 // API routes for LLM providers and models.
 
 use crate::routes::schemas::{
-    AddModelRequest, ActiveModelsInfo, CreateCustomProviderRequest, ModelSlotRequest,
-    ProviderConfigRequest, ProviderInfo, TestConnectionResponse,
-    TestModelRequest, TestProviderRequest,
+    ActiveModelsInfo, AddModelRequest, CreateCustomProviderRequest, ModelSlotRequest,
+    ProviderConfigRequest, ProviderInfo, TestConnectionResponse, TestModelRequest,
+    TestProviderRequest,
 };
-use copaw_providers::{
-    mask_api_key, ModelInfo, ProviderDefinition, ProviderRegistry, ProviderStore,
-};
-use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
     Json,
 };
+use copaw_providers::{
+    mask_api_key, ModelInfo, ProviderDefinition, ProviderRegistry, ProviderStore, ProvidersData,
+};
+use std::sync::Arc;
 
 /// Application state for models routes.
 #[derive(Clone)]
@@ -24,18 +23,8 @@ pub struct ModelsState {
     pub store: Arc<ProviderStore>,
 }
 
-/// Trait for types that have a models state.
-pub trait HasModelsState {
-    fn models_state(&self) -> &ModelsState;
-}
-
 /// Build provider info from definition and store data.
-fn build_provider_info(
-    provider: &ProviderDefinition,
-    store: &ProviderStore,
-) -> ProviderInfo {
-    let data = store.load().unwrap_or_default();
-
+fn build_provider_info(provider: &ProviderDefinition, data: &ProvidersData) -> ProviderInfo {
     if provider.is_local {
         return ProviderInfo {
             id: provider.id.clone(),
@@ -46,22 +35,18 @@ fn build_provider_info(
             is_custom: false,
             is_local: true,
             needs_base_url: false,
-            has_api_key: true,
+            has_api_key: false,
             current_api_key: String::new(),
             current_base_url: String::new(),
         };
     }
 
     let (cur_base_url, cur_api_key) = data.get_credentials(&provider.id);
-    let configured = data.is_configured(provider);
 
     let settings = data.providers.get(&provider.id);
-    let extra = settings
-        .map(|s| s.extra_models.clone())
-        .unwrap_or_default();
+    let extra = settings.map(|s| s.extra_models.clone()).unwrap_or_default();
 
-    let needs_base_url =
-        provider.is_custom || provider.default_base_url.is_empty();
+    let needs_base_url = provider.is_custom || provider.default_base_url.is_empty();
 
     ProviderInfo {
         id: provider.id.clone(),
@@ -76,7 +61,7 @@ fn build_provider_info(
         is_custom: provider.is_custom,
         is_local: provider.is_local,
         needs_base_url,
-        has_api_key: configured,
+        has_api_key: !cur_api_key.is_empty(),
         current_api_key: mask_api_key(&cur_api_key, 4),
         current_base_url: cur_base_url,
     }
@@ -85,13 +70,14 @@ fn build_provider_info(
 /// GET /api/models - List all providers.
 pub async fn list_all_providers(
     State(state): State<ModelsState>,
-) -> Json<Vec<ProviderInfo>> {
+) -> Result<Json<Vec<ProviderInfo>>, ApiError> {
+    let data = state.store.load().map_err(ApiError::Internal)?;
     let providers = state.registry.list();
     let infos: Vec<ProviderInfo> = providers
         .iter()
-        .map(|p| build_provider_info(p, &state.store))
+        .map(|p| build_provider_info(p, &data))
         .collect();
-    Json(infos)
+    Ok(Json(infos))
 }
 
 /// PUT /api/models/{provider_id}/config - Configure a provider.
@@ -106,10 +92,11 @@ pub async fn configure_provider(
         .ok_or_else(|| ApiError::NotFound(format!("Provider '{provider_id}' not found")))?;
 
     // Allow base_url for custom providers, providers without a default base URL,
-    // and Ollama (user may override).
+    // Ollama, and Anthropic (user may override).
     let allow_base_url = provider.is_custom
         || provider.default_base_url.is_empty()
-        || provider.id == "ollama";
+        || provider.id == "ollama"
+        || provider.id == "anthropic";
     let base_url = if allow_base_url { body.base_url } else { None };
 
     state
@@ -117,7 +104,8 @@ pub async fn configure_provider(
         .update_settings(&provider_id, body.api_key, base_url)
         .map_err(|e| ApiError::BadRequest(e))?;
 
-    let info = build_provider_info(&provider, &state.store);
+    let data = state.store.load().map_err(ApiError::Internal)?;
+    let info = build_provider_info(&provider, &data);
     Ok(Json(info))
 }
 
@@ -142,7 +130,8 @@ pub async fn create_custom_provider_endpoint(
         .get(&body.id)
         .ok_or_else(|| ApiError::Internal("Provider not found after creation".to_string()))?;
 
-    let info = build_provider_info(&provider, &state.store);
+    let data = state.store.load().map_err(ApiError::Internal)?;
+    let info = build_provider_info(&provider, &data);
     Ok(Json(info))
 }
 
@@ -172,7 +161,11 @@ pub async fn test_provider(
         Ok(Json(TestConnectionResponse {
             success: has_models,
             message: if has_models {
-                format!("{} is ready with {} model(s).", provider.name, provider.models.len())
+                format!(
+                    "{} is ready with {} model(s).",
+                    provider.name,
+                    provider.models.len()
+                )
             } else {
                 format!("{} has no models available.", provider.name)
             },
@@ -232,9 +225,10 @@ pub async fn delete_custom_provider_endpoint(
         .map_err(|e| ApiError::BadRequest(e))?;
 
     let providers = state.registry.list();
+    let data = state.store.load().map_err(ApiError::Internal)?;
     let infos: Vec<ProviderInfo> = providers
         .iter()
-        .map(|p| build_provider_info(p, &state.store))
+        .map(|p| build_provider_info(p, &data))
         .collect();
     Ok(Json(infos))
 }
@@ -260,7 +254,8 @@ pub async fn add_model_endpoint(
         .get(&provider_id)
         .ok_or_else(|| ApiError::Internal("Provider not found".to_string()))?;
 
-    let info = build_provider_info(&provider, &state.store);
+    let data = state.store.load().map_err(ApiError::Internal)?;
+    let info = build_provider_info(&provider, &data);
     Ok(Json(info))
 }
 
@@ -279,18 +274,19 @@ pub async fn remove_model_endpoint(
         .get(&provider_id)
         .ok_or_else(|| ApiError::Internal("Provider not found".to_string()))?;
 
-    let info = build_provider_info(&provider, &state.store);
+    let data = state.store.load().map_err(ApiError::Internal)?;
+    let info = build_provider_info(&provider, &data);
     Ok(Json(info))
 }
 
 /// GET /api/models/active - Get active LLM.
 pub async fn get_active_models(
     State(state): State<ModelsState>,
-) -> Json<ActiveModelsInfo> {
-    let data = state.store.load().unwrap_or_default();
-    Json(ActiveModelsInfo {
+) -> Result<Json<ActiveModelsInfo>, ApiError> {
+    let data = state.store.load().map_err(ApiError::Internal)?;
+    Ok(Json(ActiveModelsInfo {
         active_llm: (&data.active_llm).into(),
-    })
+    }))
 }
 
 /// PUT /api/models/active - Set active LLM.
@@ -304,19 +300,30 @@ pub async fn set_active_model(
         .ok_or_else(|| ApiError::NotFound(format!("Provider '{}' not found", body.provider_id)))?;
 
     let data = state.store.load().map_err(|e| ApiError::Internal(e))?;
+    let (base_url, api_key) = data.get_credentials(&provider.id);
 
-    if !data.is_configured(&provider) {
-        let msg = if provider.is_custom || provider.default_base_url.is_empty() {
-            format!(
+    // Validation aligned with Python implementation.
+    if provider.is_custom {
+        if base_url.is_empty() {
+            let msg = format!(
                 "Provider '{}' has no base_url configured. Please configure the base URL first.",
                 provider.name
-            )
-        } else {
-            format!(
-                "Provider '{}' has no API key configured. Please configure the API key first.",
+            );
+            return Err(ApiError::BadRequest(msg));
+        }
+    } else if provider.id == "ollama" {
+        if base_url.is_empty() {
+            let msg = format!(
+                "Provider '{}' has no base_url configured. Please configure the base URL first.",
                 provider.name
-            )
-        };
+            );
+            return Err(ApiError::BadRequest(msg));
+        }
+    } else if !provider.is_local && api_key.is_empty() {
+        let msg = format!(
+            "Provider '{}' has no API key configured. Please configure the API key first.",
+            provider.name
+        );
         return Err(ApiError::BadRequest(msg));
     }
 
@@ -364,11 +371,17 @@ pub fn create_models_router() -> axum::Router<ModelsState> {
         .route("/", get(list_all_providers))
         .route("/:provider_id/config", put(configure_provider))
         .route("/custom-providers", post(create_custom_provider_endpoint))
-        .route("/custom-providers/:provider_id", delete(delete_custom_provider_endpoint))
+        .route(
+            "/custom-providers/:provider_id",
+            delete(delete_custom_provider_endpoint),
+        )
         .route("/:provider_id/test", post(test_provider))
         .route("/:provider_id/models/test", post(test_model))
         .route("/:provider_id/models", post(add_model_endpoint))
-        .route("/:provider_id/models/:model_id", delete(remove_model_endpoint))
+        .route(
+            "/:provider_id/models/:model_id",
+            delete(remove_model_endpoint),
+        )
         .route("/active", get(get_active_models))
         .route("/active", put(set_active_model))
 }
@@ -376,7 +389,8 @@ pub fn create_models_router() -> axum::Router<ModelsState> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use copaw_providers::{ModelInfo, ProviderDefinition};
+    use axum::response::IntoResponse;
+    use copaw_providers::ModelInfo;
     use tempfile::NamedTempFile;
 
     /// Create a test registry (uses built-in providers)
@@ -403,11 +417,14 @@ mod tests {
     async fn test_list_all_providers() {
         let state = create_test_state().await;
         let result = list_all_providers(State(state)).await;
-        let providers = result.0;
+        assert!(result.is_ok());
+        let providers = result.unwrap().0;
 
         assert!(!providers.is_empty());
-        // Should have built-in providers like openai
-        assert!(providers.iter().any(|p| p.id == "openai" || p.id == "local-models"));
+        // Should have built-in providers like openai/anthropic
+        assert!(providers
+            .iter()
+            .any(|p| p.id == "openai" || p.id == "anthropic" || p.id == "local-models"));
     }
 
     #[tokio::test]
@@ -446,7 +463,25 @@ mod tests {
 
         let info = result.unwrap().0;
         assert_eq!(info.id, "openai");
-        assert!(info.has_api_key);
+        assert!(!info.current_api_key.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_configure_anthropic_provider_allows_base_url_override() {
+        let state = create_test_state().await;
+        let body = ProviderConfigRequest {
+            api_key: Some("sk-ant-test-key".to_string()),
+            base_url: Some("https://anthropic-proxy.test/v1".to_string()),
+        };
+
+        let result =
+            configure_provider(State(state), Path("anthropic".to_string()), Json(body)).await;
+        assert!(result.is_ok());
+
+        let info = result.unwrap().0;
+        assert_eq!(info.id, "anthropic");
+        assert_eq!(info.current_base_url, "https://anthropic-proxy.test/v1");
+        assert!(!info.current_api_key.is_empty());
     }
 
     #[tokio::test]
@@ -474,12 +509,7 @@ mod tests {
     #[tokio::test]
     async fn test_test_provider_not_found() {
         let state = create_test_state().await;
-        let result = test_provider(
-            State(state),
-            Path("unknown".to_string()),
-            Json(None),
-        )
-        .await;
+        let result = test_provider(State(state), Path("unknown".to_string()), Json(None)).await;
 
         assert!(result.is_err());
     }
@@ -488,12 +518,7 @@ mod tests {
     async fn test_test_provider_local() {
         let state = create_test_state().await;
         // Use llamacpp which is a built-in local provider
-        let result = test_provider(
-            State(state),
-            Path("llamacpp".to_string()),
-            Json(None),
-        )
-        .await;
+        let result = test_provider(State(state), Path("llamacpp".to_string()), Json(None)).await;
 
         assert!(result.is_ok());
         let response = result.unwrap().0;
@@ -509,12 +534,8 @@ mod tests {
             base_url: Some("https://api.openai.com/v1".to_string()),
         };
 
-        let result = test_provider(
-            State(state),
-            Path("openai".to_string()),
-            Json(Some(body)),
-        )
-        .await;
+        let result =
+            test_provider(State(state), Path("openai".to_string()), Json(Some(body))).await;
 
         assert!(result.is_ok());
         let response = result.unwrap().0;
@@ -529,12 +550,7 @@ mod tests {
             model_id: "gpt-4o".to_string(),
         };
 
-        let result = test_model(
-            State(state),
-            Path("openai".to_string()),
-            Json(body),
-        )
-        .await;
+        let result = test_model(State(state), Path("openai".to_string()), Json(body)).await;
 
         assert!(result.is_ok());
         let response = result.unwrap().0;
@@ -557,11 +573,8 @@ mod tests {
         let _ = create_custom_provider_endpoint(State(state.clone()), Json(body)).await;
 
         // Then delete it
-        let result = delete_custom_provider_endpoint(
-            State(state),
-            Path("test-custom".to_string()),
-        )
-        .await;
+        let result =
+            delete_custom_provider_endpoint(State(state), Path("test-custom".to_string())).await;
 
         assert!(result.is_ok());
     }
@@ -575,12 +588,7 @@ mod tests {
             id: "gpt-4o-mini-test".to_string(),
             name: "GPT-4o Mini Test".to_string(),
         };
-        let result = add_model_endpoint(
-            State(state),
-            Path("openai".to_string()),
-            Json(body),
-        )
-        .await;
+        let result = add_model_endpoint(State(state), Path("openai".to_string()), Json(body)).await;
 
         if let Err(e) = &result {
             eprintln!("Error adding model: {:?}", e);
@@ -628,8 +636,9 @@ mod tests {
     async fn test_get_active_models() {
         let state = create_test_state().await;
         let result = get_active_models(State(state)).await;
+        assert!(result.is_ok());
 
-        let info = result.0;
+        let info = result.unwrap().0;
         // Initially empty, but the struct should exist
         assert_eq!(info.active_llm.provider_id, "");
         assert_eq!(info.active_llm.model, "");
@@ -660,6 +669,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_set_active_model_roundtrip_persists() {
+        let state = create_test_state().await;
+
+        // Local provider does not require credentials.
+        let body = ModelSlotRequest {
+            provider_id: "llamacpp".to_string(),
+            model: "qwen2.5:7b".to_string(),
+        };
+
+        let set_result = set_active_model(State(state.clone()), Json(body.clone())).await;
+        assert!(set_result.is_ok());
+        let set_info = set_result.unwrap().0;
+        assert_eq!(set_info.active_llm.provider_id, body.provider_id);
+        assert_eq!(set_info.active_llm.model, body.model);
+
+        let get_result = get_active_models(State(state)).await;
+        assert!(get_result.is_ok());
+        let get_info = get_result.unwrap().0;
+        assert_eq!(get_info.active_llm.provider_id, "llamacpp");
+        assert_eq!(get_info.active_llm.model, "qwen2.5:7b");
+    }
+
+    #[tokio::test]
     async fn test_api_error_not_found() {
         let error = ApiError::NotFound("test".to_string());
         let response = error.into_response();
@@ -686,11 +718,12 @@ mod tests {
         let store = Arc::new(create_test_store(registry.clone()).await);
 
         let provider = registry.get("llamacpp").unwrap();
-        let info = build_provider_info(&provider, &store);
+        let data = store.load().unwrap();
+        let info = build_provider_info(&provider, &data);
 
         assert_eq!(info.id, "llamacpp");
         assert!(info.is_local);
-        assert!(info.has_api_key);
+        assert!(info.current_api_key.is_empty());
     }
 
     #[tokio::test]
@@ -699,11 +732,12 @@ mod tests {
         let store = Arc::new(create_test_store(registry.clone()).await);
 
         let provider = registry.get("openai").unwrap();
-        let info = build_provider_info(&provider, &store);
+        let data = store.load().unwrap();
+        let info = build_provider_info(&provider, &data);
 
         assert_eq!(info.id, "openai");
         assert!(!info.is_local);
-        assert!(!info.has_api_key); // No API key configured
+        assert!(info.current_api_key.is_empty()); // No API key configured
     }
 
     #[tokio::test]

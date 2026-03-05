@@ -6,14 +6,14 @@
 //! execution, pause/resume, matching the Python implementation in
 //! src/copaw/app/crons/manager.py.
 
-use crate::crons::job_repo::{JobRepoError, JobRepository, JobRepoResult};
+use crate::crons::job_repo::{JobRepoResult, JobRepository};
 use crate::crons::models::{CronJobSpec, CronJobState, JobStatus};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use uuid::Uuid;
 use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 /// Error type for cron manager operations
 #[derive(Debug, thiserror::Error)]
@@ -31,6 +31,7 @@ pub enum CronManagerError {
     InvalidCron(String),
 
     #[error("Job execution error: {0}")]
+    #[allow(dead_code)]
     Execution(String),
 }
 
@@ -101,9 +102,7 @@ impl CronManager {
             repo: Arc::new(repo),
             scheduler: Arc::new(RwLock::new(
                 tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
-                        JobScheduler::new().await
-                    })
+                    tokio::runtime::Handle::current().block_on(async { JobScheduler::new().await })
                 })
                 .map_err(|e| {
                     error!("Failed to create scheduler: {}", e);
@@ -122,6 +121,7 @@ impl CronManager {
     /// Start the cron manager
     ///
     /// This loads all jobs from the repository and schedules them.
+    #[allow(dead_code)]
     pub async fn start(&self) -> CronManagerResult<()> {
         let mut started = self.started.write().await;
         if *started {
@@ -141,7 +141,7 @@ impl CronManager {
 
         // Start the scheduler
         {
-            let mut scheduler = self.scheduler.write().await;
+            let scheduler = self.scheduler.write().await;
             scheduler
                 .start()
                 .await
@@ -164,6 +164,7 @@ impl CronManager {
     /// Stop the cron manager
     ///
     /// This stops the scheduler and clears all scheduled jobs.
+    #[allow(dead_code)]
     pub async fn stop(&self) -> CronManagerResult<()> {
         let mut started = self.started.write().await;
         if !*started {
@@ -192,6 +193,7 @@ impl CronManager {
     }
 
     /// Get a specific job by ID
+    #[allow(dead_code)]
     pub async fn get_job(&self, job_id: &str) -> JobRepoResult<Option<CronJobSpec>> {
         self.repo.get_job(job_id).await
     }
@@ -340,7 +342,11 @@ impl CronManager {
                 Err(e) => {
                     state.last_status = Some(JobStatus::Error);
                     state.last_error = Some(e);
-                    error!("Job {} failed: {}", job_id, state.last_error.as_ref().unwrap());
+                    error!(
+                        "Job {} failed: {}",
+                        job_id,
+                        state.last_error.as_ref().unwrap()
+                    );
                 }
             }
 
@@ -357,10 +363,7 @@ impl CronManager {
             sem: Arc::new(tokio::sync::Semaphore::new(spec.runtime.max_concurrency)),
             paused: Arc::new(RwLock::new(!spec.enabled)),
         };
-        self.runtimes
-            .write()
-            .await
-            .insert(spec.id.clone(), runtime);
+        self.runtimes.write().await.insert(spec.id.clone(), runtime);
 
         // Normalize cron expression
         let cron_expr = crate::crons::models::ScheduleSpec::normalize_cron(&spec.schedule.cron)
@@ -472,8 +475,8 @@ impl CronManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::sync::Arc;
+    use tempfile::TempDir;
 
     // Mock executor for testing
     struct MockExecutor;
