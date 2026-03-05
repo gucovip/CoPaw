@@ -109,6 +109,7 @@ async fn list_channel_types() -> Json<Vec<String>> {
         "telegram".to_string(),
         "qq".to_string(),
         "imessage".to_string(),
+        "voice".to_string(),
         "console".to_string(),
     ])
 }
@@ -368,6 +369,7 @@ mod tests {
         let json = list_channel_types().await;
         assert!(json.contains(&"console".to_string()));
         assert!(json.contains(&"feishu".to_string()));
+        assert!(json.contains(&"voice".to_string()));
     }
 
     #[tokio::test]

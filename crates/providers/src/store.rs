@@ -373,6 +373,7 @@ impl ProviderStore {
         provider_id: &str,
         api_key: Option<String>,
         base_url: Option<String>,
+        chat_model: Option<String>,
     ) -> Result<ProvidersData, String> {
         let mut data = self.load()?;
 
@@ -385,6 +386,9 @@ impl ProviderStore {
             }
             if cpd.base_url.is_empty() {
                 cpd.base_url = cpd.default_base_url.clone();
+            }
+            if let Some(ref cm) = chat_model {
+                cpd.chat_model = cm.clone();
             }
             // Update registry
             self.registry.register_custom(cpd.to_definition())?;
@@ -400,6 +404,9 @@ impl ProviderStore {
                 if let Some(defn) = self.registry.get(provider_id) {
                     settings.base_url = defn.default_base_url;
                 }
+            }
+            if let Some(ref cm) = chat_model {
+                settings.chat_model = cm.clone();
             }
         }
 
@@ -429,6 +436,7 @@ impl ProviderStore {
         name: &str,
         default_base_url: &str,
         api_key_prefix: &str,
+        chat_model: &str,
         models: Vec<ModelInfo>,
     ) -> Result<ProvidersData, String> {
         // Validate ID
@@ -450,7 +458,11 @@ impl ProviderStore {
             models,
             base_url: default_base_url.to_string(),
             api_key: String::new(),
-            chat_model: default_chat_model(),
+            chat_model: if chat_model.is_empty() {
+                default_chat_model()
+            } else {
+                chat_model.to_string()
+            },
         };
 
         data.custom_providers
@@ -674,7 +686,7 @@ mod tests {
         let store = create_test_store(&temp_dir);
 
         let data = store
-            .update_settings("openai", Some("sk-test".to_string()), None)
+            .update_settings("openai", Some("sk-test".to_string()), None, None)
             .unwrap();
         assert_eq!(data.providers.get("openai").unwrap().api_key, "sk-test");
 
@@ -703,6 +715,7 @@ mod tests {
                 "My Provider",
                 "https://api.example.com/v1",
                 "custom-",
+                "OpenAIChatModel",
                 vec![],
             )
             .unwrap();
@@ -727,6 +740,7 @@ mod tests {
                 "My Provider",
                 "https://api.example.com/v1",
                 "custom-",
+                "OpenAIChatModel",
                 vec![],
             )
             .unwrap();

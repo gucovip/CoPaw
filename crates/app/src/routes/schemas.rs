@@ -12,6 +12,8 @@ pub struct ProviderConfigRequest {
     pub api_key: Option<String>,
     /// Base URL to configure.
     pub base_url: Option<String>,
+    /// Optional chat model class name (protocol selection).
+    pub chat_model: Option<String>,
 }
 
 /// Model slot request.
@@ -36,9 +38,16 @@ pub struct CreateCustomProviderRequest {
     /// API key prefix.
     #[serde(default)]
     pub api_key_prefix: String,
+    /// Chat model class name.
+    #[serde(default = "default_chat_model_name")]
+    pub chat_model: String,
     /// Models list.
     #[serde(default)]
     pub models: Vec<ModelInfo>,
+}
+
+fn default_chat_model_name() -> String {
+    "OpenAIChatModel".to_string()
 }
 
 /// Add model request.
@@ -66,6 +75,8 @@ pub struct TestProviderRequest {
     pub api_key: Option<String>,
     /// Optional base URL to test.
     pub base_url: Option<String>,
+    /// Optional chat model class name to test protocol behavior.
+    pub chat_model: Option<String>,
 }
 
 /// Test model request.
@@ -82,6 +93,21 @@ pub struct TestConnectionResponse {
     pub success: bool,
     /// Human-readable result message.
     pub message: String,
+}
+
+/// Discover models response.
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoverModelsResponse {
+    /// Whether discovery succeeded.
+    pub success: bool,
+    /// Human-readable result message.
+    pub message: String,
+    /// Discovered models.
+    #[serde(default)]
+    pub models: Vec<ModelInfo>,
+    /// Number of newly added models.
+    #[serde(default)]
+    pub added_count: i32,
 }
 
 /// Provider info returned by API.
@@ -117,6 +143,9 @@ pub struct ProviderInfo {
     /// Current base URL.
     #[serde(default)]
     pub current_base_url: String,
+    /// Chat model class name.
+    #[serde(default = "default_chat_model_name")]
+    pub chat_model: String,
 }
 
 /// Active models info.

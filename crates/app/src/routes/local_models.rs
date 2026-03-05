@@ -183,6 +183,7 @@ pub async fn list_local_model_providers(
             has_api_key: false,
             current_api_key: String::new(),
             current_base_url: String::new(),
+            chat_model: p.chat_model.clone(),
         })
         .collect();
 

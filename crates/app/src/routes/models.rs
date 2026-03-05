@@ -2,9 +2,9 @@
 // API routes for LLM providers and models.
 
 use crate::routes::schemas::{
-    ActiveModelsInfo, AddModelRequest, CreateCustomProviderRequest, ModelSlotRequest,
-    ProviderConfigRequest, ProviderInfo, TestConnectionResponse, TestModelRequest,
-    TestProviderRequest,
+    ActiveModelsInfo, AddModelRequest, CreateCustomProviderRequest, DiscoverModelsResponse,
+    ModelSlotRequest, ProviderConfigRequest, ProviderInfo, TestConnectionResponse,
+    TestModelRequest, TestProviderRequest,
 };
 use axum::{
     extract::{Path, State},
@@ -38,6 +38,7 @@ fn build_provider_info(provider: &ProviderDefinition, data: &ProvidersData) -> P
             has_api_key: false,
             current_api_key: String::new(),
             current_base_url: String::new(),
+            chat_model: provider.chat_model.clone(),
         };
     }
 
@@ -64,6 +65,7 @@ fn build_provider_info(provider: &ProviderDefinition, data: &ProvidersData) -> P
         has_api_key: !cur_api_key.is_empty(),
         current_api_key: mask_api_key(&cur_api_key, 4),
         current_base_url: cur_base_url,
+        chat_model: provider.chat_model.clone(),
     }
 }
 
@@ -101,7 +103,16 @@ pub async fn configure_provider(
 
     state
         .store
-        .update_settings(&provider_id, body.api_key, base_url)
+        .update_settings(
+            &provider_id,
+            body.api_key,
+            base_url,
+            if provider.is_custom {
+                body.chat_model.clone()
+            } else {
+                None
+            },
+        )
         .map_err(|e| ApiError::BadRequest(e))?;
 
     let data = state.store.load().map_err(ApiError::Internal)?;
@@ -121,6 +132,7 @@ pub async fn create_custom_provider_endpoint(
             &body.name,
             &body.default_base_url,
             &body.api_key_prefix,
+            &body.chat_model,
             body.models,
         )
         .map_err(|e| ApiError::BadRequest(e))?;
@@ -147,6 +159,7 @@ pub async fn test_provider(
         .ok_or_else(|| ApiError::NotFound(format!("Provider '{provider_id}' not found")))?;
 
     let (api_key, base_url) = if let Some(req) = body {
+        let _chat_model = req.chat_model;
         (req.api_key, req.base_url)
     } else {
         let data = state.store.load().map_err(|e| ApiError::Internal(e))?;
@@ -195,6 +208,26 @@ pub async fn test_provider(
             message: format!("{} configuration test not yet implemented.", provider.name),
         }))
     }
+}
+
+/// POST /api/models/{provider_id}/discover - Discover provider models.
+pub async fn discover_models(
+    State(state): State<ModelsState>,
+    Path(provider_id): Path<String>,
+    Json(_body): Json<Option<TestProviderRequest>>,
+) -> Result<Json<DiscoverModelsResponse>, ApiError> {
+    let provider = state
+        .registry
+        .get(&provider_id)
+        .ok_or_else(|| ApiError::NotFound(format!("Provider '{provider_id}' not found")))?;
+
+    Ok(Json(DiscoverModelsResponse {
+        success: true,
+        message: "Model discovery is not yet implemented; returning current provider model list."
+            .to_string(),
+        models: provider.models.clone(),
+        added_count: 0,
+    }))
 }
 
 /// POST /api/models/{provider_id}/models/test - Test a specific model.
@@ -376,6 +409,7 @@ pub fn create_models_router() -> axum::Router<ModelsState> {
             delete(delete_custom_provider_endpoint),
         )
         .route("/:provider_id/test", post(test_provider))
+        .route("/:provider_id/discover", post(discover_models))
         .route("/:provider_id/models/test", post(test_model))
         .route("/:provider_id/models", post(add_model_endpoint))
         .route(
@@ -433,6 +467,7 @@ mod tests {
         let body = ProviderConfigRequest {
             api_key: Some("test-key".to_string()),
             base_url: None,
+            chat_model: None,
         };
 
         let result = configure_provider(
@@ -456,6 +491,7 @@ mod tests {
         let body = ProviderConfigRequest {
             api_key: Some("sk-test123".to_string()),
             base_url: None,
+            chat_model: None,
         };
 
         let result = configure_provider(State(state), Path("openai".to_string()), Json(body)).await;
@@ -472,6 +508,7 @@ mod tests {
         let body = ProviderConfigRequest {
             api_key: Some("sk-ant-test-key".to_string()),
             base_url: Some("https://anthropic-proxy.test/v1".to_string()),
+            chat_model: None,
         };
 
         let result =
@@ -492,6 +529,7 @@ mod tests {
             name: "Custom OpenAI".to_string(),
             default_base_url: "https://custom.openai.com/v1".to_string(),
             api_key_prefix: "sk-".to_string(),
+            chat_model: "OpenAIChatModel".to_string(),
             models: vec![ModelInfo {
                 id: "gpt-4o".to_string(),
                 name: "GPT-4o".to_string(),
@@ -532,6 +570,7 @@ mod tests {
         let body = TestProviderRequest {
             api_key: Some("sk-test".to_string()),
             base_url: Some("https://api.openai.com/v1".to_string()),
+            chat_model: None,
         };
 
         let result =
@@ -568,6 +607,7 @@ mod tests {
             name: "Test Custom".to_string(),
             default_base_url: "https://test.com".to_string(),
             api_key_prefix: "test-".to_string(),
+            chat_model: "OpenAIChatModel".to_string(),
             models: vec![],
         };
         let _ = create_custom_provider_endpoint(State(state.clone()), Json(body)).await;

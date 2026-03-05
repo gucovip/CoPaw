@@ -171,6 +171,7 @@ pub async fn list_ollama_providers(
                 has_api_key: false,
                 current_api_key: String::new(),
                 current_base_url: String::new(),
+                chat_model: provider.chat_model.clone(),
             };
             Ok(Json(vec![info]))
         }

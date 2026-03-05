@@ -1562,7 +1562,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         test_state
             .state
             .store
-            .update_settings("openai", Some("sk-test".to_string()), Some(base_url))
+            .update_settings("openai", Some("sk-test".to_string()), Some(base_url), None)
             .unwrap();
         test_state
             .state
@@ -1652,7 +1652,12 @@ data: {\"type\":\"message_stop\"}\n\n",
         test_state
             .state
             .store
-            .update_settings("anthropic", Some("sk-ant-test".to_string()), Some(base_url))
+            .update_settings(
+                "anthropic",
+                Some("sk-ant-test".to_string()),
+                Some(base_url),
+                None,
+            )
             .unwrap();
         test_state
             .state
@@ -1693,7 +1698,12 @@ data: {\"type\":\"message_stop\"}\n\n",
         test_state
             .state
             .store
-            .update_settings("anthropic", Some("sk-ant-test".to_string()), Some(base_url))
+            .update_settings(
+                "anthropic",
+                Some("sk-ant-test".to_string()),
+                Some(base_url),
+                None,
+            )
             .unwrap();
         test_state
             .state

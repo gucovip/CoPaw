@@ -54,6 +54,10 @@ fn default_chat_model() -> String {
     "OpenAIChatModel".to_string()
 }
 
+fn anthropic_chat_model() -> String {
+    "AnthropicChatModel".to_string()
+}
+
 impl ProviderDefinition {
     pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
@@ -349,7 +353,7 @@ pub fn builtin_providers() -> Vec<ProviderDefinition> {
             models: anthropic_models(),
             is_custom: false,
             is_local: false,
-            chat_model: default_chat_model(),
+            chat_model: anthropic_chat_model(),
         },
         ProviderDefinition {
             id: "ollama".to_string(),
