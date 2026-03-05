@@ -43,6 +43,15 @@ fn build_provider_info(provider: &ProviderDefinition, data: &ProvidersData) -> P
     }
 
     let (cur_base_url, cur_api_key) = data.get_credentials(&provider.id);
+    let api_key_prefix = if provider.id == "anthropic"
+        && !cur_base_url.is_empty()
+        && !cur_base_url.starts_with("https://api.anthropic.com")
+    {
+        // For Anthropic-compatible proxies, don't enforce official sk-ant-* prefix.
+        String::new()
+    } else {
+        provider.api_key_prefix.clone()
+    };
 
     let settings = data.providers.get(&provider.id);
     let extra = settings.map(|s| s.extra_models.clone()).unwrap_or_default();
@@ -52,7 +61,7 @@ fn build_provider_info(provider: &ProviderDefinition, data: &ProvidersData) -> P
     ProviderInfo {
         id: provider.id.clone(),
         name: provider.name.clone(),
-        api_key_prefix: provider.api_key_prefix.clone(),
+        api_key_prefix,
         models: {
             let mut models = provider.models.clone();
             models.extend(extra.clone());
@@ -519,6 +528,7 @@ mod tests {
         assert_eq!(info.id, "anthropic");
         assert_eq!(info.current_base_url, "https://anthropic-proxy.test/v1");
         assert!(!info.current_api_key.is_empty());
+        assert!(info.api_key_prefix.is_empty());
     }
 
     #[tokio::test]
